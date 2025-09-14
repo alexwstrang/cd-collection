@@ -16,8 +16,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
-
     <style>
         body {
             background-color: #111827; /* bg-gray-900 */
@@ -287,7 +285,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.25</span>
+                            <span className="font-mono text-xs text-gray-500">v0.26</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -329,79 +327,89 @@
             );
         }
         
-        // --- Barcode Scanner Component (using ZXing-js) ---
-function BarcodeScanner({ onScanSuccess, onCancel }) {
-    // --- THIS IS THE FIX ---
-    // This line makes the component self-contained by defining the React hooks it needs.
-    const { useState, useEffect, useRef } = React;
+        // --- Barcode Scanner Component (using Native Browser API) ---
+        function BarcodeScanner({ onScanSuccess, onCancel }) {
+            const { useState, useEffect, useRef } = React;
+            const [error, setError] = useState(null);
+            const videoRef = useRef(null);
+            const streamRef = useRef(null); // To hold the stream for cleanup
+            const intervalRef = useRef(null); // To hold the detection interval
 
-    const [error, setError] = useState(null);
-    const codeReaderRef = useRef(null); // To hold the library instance
-    const videoRef = useRef(null); // To reference the video element
-
-    useEffect(() => {
-        // First, check if the ZXing library loaded and is available on the window.
-        if (!window.ZXingBrowser) {
-            setError("Scanning library (ZXing) failed to load. Please check your internet connection or ad blocker and refresh the page.");
-            return;
-        }
-
-        // Initialize the library instance
-        codeReaderRef.current = new ZXingBrowser.BrowserMultiFormatReader();
-
-        // Check if the video element is ready
-        if (!videoRef.current) {
-            setError("Video element is not yet available.");
-            return;
-        }
-        
-        // Start scanning
-        codeReaderRef.current.decodeFromInputVideoDevice(undefined, videoRef.current)
-            .then(result => {
-                // A barcode was successfully found
-                onScanSuccess(result.getText());
-            })
-            .catch(err => {
-                // ZXing throws a NotFoundException on every frame without a barcode. This is normal.
-                // We only want to display other, more critical errors.
-                if (!(err instanceof ZXingBrowser.NotFoundException)) {
-                    console.error("ZXing Error:", err);
-                    setError(`Scanner failed to start. Please ensure camera permissions are allowed. Error: ${err.message}`);
+            useEffect(() => {
+                // --- 1. Check if the API is supported in the browser ---
+                if (!('BarcodeDetector' in window)) {
+                    setError("This browser does not support the native Barcode Detection API. Please try Chrome on desktop/android or Safari on a modern iPhone.");
+                    return;
                 }
-            });
 
-        // Cleanup function to stop the scanner when the component unmounts
-        return () => {
-            if (codeReaderRef.current) {
-                codeReaderRef.current.reset();
-            }
-        };
-    }, [onScanSuccess]);
+                // --- 2. Create the detector ---
+                // We specify 'ean_13' as it's the standard for CD barcodes.
+                const barcodeDetector = new BarcodeDetector({
+                    formats: ['ean_13', 'upc_a', 'ean_8']
+                });
 
-    return (
-        <div className="flex flex-col items-center gap-4">
-            {error && (
-                <div className="p-3 mb-2 w-full bg-red-900 border border-red-700 text-red-200 text-sm rounded-md">
-                    <p className="font-bold">Scanner Error</p>
-                    <p>{error}</p>
+                // --- 3. Start the video stream ---
+                navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                }).then(stream => {
+                    streamRef.current = stream; // Save stream for cleanup
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        videoRef.current.play();
+
+                        // --- 4. Start detecting barcodes on a timer ---
+                        intervalRef.current = setInterval(async () => {
+                            try {
+                                const barcodes = await barcodeDetector.detect(videoRef.current);
+                                if (barcodes.length > 0) {
+                                    // --- Barcode Found! ---
+                                    clearInterval(intervalRef.current); // Stop detecting
+                                    onScanSuccess(barcodes[0].rawValue);
+                                }
+                            } catch (e) {
+                                console.error("Detection error:", e);
+                                // Don't set a user-facing error for detection frames
+                            }
+                        }, 200); // Check for a barcode 5 times per second
+                    }
+                }).catch(err => {
+                    console.error("getUserMedia error:", err);
+                    setError(`Could not access the camera. Please grant permission. Error: ${err.message}`);
+                });
+
+                // --- 5. Cleanup function ---
+                return () => {
+                    clearInterval(intervalRef.current);
+                    if (streamRef.current) {
+                        streamRef.current.getTracks().forEach(track => track.stop());
+                    }
+                };
+            }, [onScanSuccess]);
+
+            return (
+                <div className="flex flex-col items-center gap-4">
+                    {error && (
+                        <div className="p-3 mb-2 w-full bg-red-900 border border-red-700 text-red-200 text-sm rounded-md">
+                            <p className="font-bold">Scanner Error</p>
+                            <p>{error}</p>
+                        </div>
+                    )}
+                    <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
+
+                    <div className="scanner-viewfinder">
+                        <video ref={videoRef} id="reader" className="w-full h-full object-cover" muted playsInline></video>
+                        <div className="scanner-scan-line"></div>
+                    </div>
+
+                    <button
+                        onClick={onCancel}
+                        className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
+                    >
+                        Cancel Scan
+                    </button>
                 </div>
-            )}
-            <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
-
-            <div className="scanner-viewfinder">
-                <video ref={videoRef} id="reader" className="w-full h-full object-cover"></video>
-                <div className="scanner-scan-line"></div>
-            </div>
-
-            <button
-                onClick={onCancel}
-                className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-                Cancel Scan
-            </button>
-        </div>
-    );
-}
+            );
+        }
 
         // --- Add Single Album Component ---
         function AddAlbum({ onAlbumAdded, onCancel }) {
