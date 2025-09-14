@@ -346,7 +346,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.16</span>
+                            <span className="font-mono text-xs text-gray-500">v0.17</span>
                         </div>
 
                         <div className="md:hidden">
@@ -388,58 +388,76 @@
         }
         
         function BarcodeScanner({ onScanSuccess, onCancel }) {
-            useEffect(() => {
-                const html5QrCode = new Html5Qrcode("reader");
-        
-                const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-                    html5QrCode.stop()
-                        .finally(() => {
-                            onScanSuccess(decodedText);
-                        });
-                };
-        
-                const scannerConfig = { 
-                    fps: 10, 
-                    qrbox: { width: 250, height: 150 } 
-                };
+    // Use a ref to hold the scanner instance so we can reliably stop it.
+    const scannerRef = useRef(null);
 
-                const cameraConfig = { 
-                    facingMode: "environment",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                };
-        
-                html5QrCode.start(cameraConfig, scannerConfig, qrCodeSuccessCallback)
-                    .catch(err => { 
-                        console.error("Unable to start scanning.", err);
-                        onCancel(); 
+    useEffect(() => {
+        // Initialize the scanner and store the instance in the ref.
+        const html5QrCode = new Html5Qrcode("reader");
+        scannerRef.current = html5QrCode;
+
+        const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+            // Stop the scanner and then call the success handler.
+            if (scannerRef.current) {
+                scannerRef.current.stop()
+                    .then(() => {
+                        onScanSuccess(decodedText);
+                    })
+                    .catch(err => {
+                        console.error("Failed to stop scanner after success.", err);
+                        onScanSuccess(decodedText); // Still call success handler
                     });
-        
-                return () => {
-                    if (html5QrCode && html5QrCode.getState() === 2) { // 2 means SCANNING
-                        html5QrCode.stop().catch(err => {
-                            console.error("Failed to stop scanner during cleanup.", err);
-                        });
-                    }
-                };
-            }, [onScanSuccess, onCancel]);
-        
-            return (
-                <div className="flex flex-col items-center gap-4">
-                    <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
-                    <div className="scanner-viewfinder">
-                        <div id="reader"></div>
-                        <div className="scanner-scan-line"></div>
-                    </div>
-                    <button
-                        onClick={onCancel}
-                        className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
-                    >
-                        Cancel Scan
-                    </button>
-                </div>
-            );
-        }
+            }
+        };
+
+        const scannerConfig = {
+            fps: 10,
+            qrbox: { width: 250, height: 150 },
+            // This experimental feature can improve performance on supported devices (like iOS).
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: true,
+            },
+        };
+
+        // --- THE MAIN FIX ---
+        // Start the scanner using the simple `{ facingMode: "environment" }` config.
+        // This correctly tells the library to find and use the device's back camera.
+        html5QrCode.start(
+            { facingMode: "environment" },
+            scannerConfig,
+            qrCodeSuccessCallback
+        ).catch(err => {
+            console.error("Unable to start scanning.", err);
+            alert("Could not start barcode scanner. Please check camera permissions.");
+            onCancel();
+        });
+
+        // Cleanup function to stop the scanner when the component unmounts.
+        return () => {
+            if (scannerRef.current && scannerRef.current.getState() === Html5Qrcode.SCANNING_STATE.SCANNING) {
+                scannerRef.current.stop().catch(err => {
+                    console.error("Failed to stop scanner during cleanup.", err);
+                });
+            }
+        };
+    }, [onScanSuccess, onCancel]);
+
+    return (
+        <div className="flex flex-col items-center gap-4">
+            <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
+            <div className="scanner-viewfinder">
+                <div id="reader"></div>
+                <div className="scanner-scan-line"></div>
+            </div>
+            <button
+                onClick={onCancel}
+                className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+                Cancel Scan
+            </button>
+        </div>
+    );
+}
 
         function AddAlbum({ onAlbumAdded, onCancel }) {
             const [barcode, setBarcode] = useState('');
