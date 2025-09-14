@@ -396,7 +396,7 @@
             );
         }
         
-       // --- Barcode Scanner Component ---
+      // --- Barcode Scanner Component ---
         function BarcodeScanner({ onScanSuccess, onCancel }) {
             useEffect(() => {
                 const html5QrCode = new Html5Qrcode("reader");
@@ -408,14 +408,11 @@
                         });
                 };
         
-                // This config tells the scanner what to look for and how often.
                 const scannerConfig = { 
                     fps: 10, 
                     qrbox: { width: 250, height: 150 } 
                 };
 
-                // This config tells the browser what kind of camera and video stream to request.
-                // Requesting a standard HD resolution helps stabilize autofocus on iPhones.
                 const cameraConfig = { 
                     facingMode: "environment",
                     width: { ideal: 1280 },
@@ -428,15 +425,16 @@
                         onCancel(); 
                     });
         
+                // This cleanup function is crucial for stopping the camera
                 return () => {
-                    try {
-                        if (html5QrCode && html5QrCode.isScanning) {
-                            html5QrCode.stop();
-                        }
-                    } catch (err) {
-                        console.error("Failed to stop scanner during cleanup.", err);
+                    // Using .getState() is a safer way to check before stopping
+                    if (html5QrCode && html5QrCode.getState() === 2) { // 2 means SCANNING
+                        html5QrCode.stop().catch(err => {
+                            console.error("Failed to stop scanner during cleanup.", err);
+                        });
                     }
                 };
+            // VITAL FIX: Add dependencies here to ensure the effect re-runs
             }, [onScanSuccess, onCancel]);
         
             return (
