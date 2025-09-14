@@ -129,7 +129,6 @@
             );
         }
 
-        // --- Suggestion Modal Component ---
         function SuggestionModal({ isOpen, album, onClose, onSuggestAnother }) {
             if (!isOpen) return null;
 
@@ -164,7 +163,6 @@
             );
         }
 
-        // --- Main App Component ---
         function App() {
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -188,7 +186,6 @@
             );
         }
 
-        // --- Login/Signup Component ---
         function Login() {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
@@ -250,7 +247,6 @@
             );
         }
 
-        // --- Main Dashboard Component ---
         function Dashboard({ user }) {
             const [view, setView] = useState('gallery');
             const [albums, setAlbums] = useState([]);
@@ -299,7 +295,6 @@
                 }
                 
                 let suggestedAlbum = suggestion.album;
-                // If there's more than one choice, make sure we don't suggest the same one twice in a row
                 if (unlistened.length > 1 && suggestion.album) {
                     const remainingAlbums = unlistened.filter(a => a.id !== suggestion.album.id);
                     const randomIndex = Math.floor(Math.random() * remainingAlbums.length);
@@ -332,7 +327,6 @@
             );
         }
 
-        // --- Navbar Component ---
         function Navbar({ user, setView, currentView }) {
             const [isMenuOpen, setIsMenuOpen] = useState(false);
             const activeClass = "bg-indigo-600 text-white";
@@ -355,7 +349,6 @@
                             <span className="font-mono text-xs text-gray-500">v0.16</span>
                         </div>
 
-                        {/* Hamburger Button - Mobile */}
                         <div className="md:hidden">
                             <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700">
                                 <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
@@ -364,7 +357,6 @@
                             </button>
                         </div>
 
-                        {/* Desktop Navigation */}
                         <nav className="hidden md:flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                             <NavLink view="gallery">Collection</NavLink>
                             <NavLink view="toListen">To Listen</NavLink>
@@ -377,7 +369,6 @@
                         </div>
                     </div>
 
-                    {/* Mobile Menu */}
                     {isMenuOpen && (
                         <div className="md:hidden mt-4 bg-gray-800 rounded-lg p-4">
                             <nav className="flex flex-col space-y-2">
@@ -396,7 +387,6 @@
             );
         }
         
-        // --- Barcode Scanner Component ---
         function BarcodeScanner({ onScanSuccess, onCancel }) {
             useEffect(() => {
                 const html5QrCode = new Html5Qrcode("reader");
@@ -451,7 +441,6 @@
             );
         }
 
-        // --- Add Single Album Component ---
         function AddAlbum({ onAlbumAdded, onCancel }) {
             const [barcode, setBarcode] = useState('');
             const [albumData, setAlbumData] = useState(null);
@@ -690,7 +679,6 @@
             );
         }
         
-        // --- Decade Albums Modal Component ---
         function DecadeAlbumsModal({ isOpen, decade, albums, onClose }) {
             if (!isOpen) return null;
 
@@ -721,7 +709,6 @@
             );
         }
 
-       // --- Stats Component ---
         function Stats({ albums, loading }) {
             const [decadeModalData, setDecadeModalData] = useState({ isOpen: false, decade: '', albums: [] });
             
@@ -844,7 +831,6 @@
             );
         }
         
-        // --- Lightbox Component ---
         function Lightbox({ album, onClose, onToggleListened }) {
             if (!album) return null;
 
@@ -879,7 +865,6 @@
             );
         }
 
-        // --- Albums Display (Gallery + List) Component ---
         function AlbumDisplay({ albums, setAlbums, loading, onAlbumUpdated, setView, onSuggestAlbum }) {
             const [viewMode, setViewMode] = useState('gallery');
             const [editingAlbumId, setEditingAlbumId] = useState(null);
@@ -1057,7 +1042,6 @@
                                         key={album.id}
                                         className="bg-gray-800 rounded-lg p-4 flex flex-col gap-3 md:table-row md:p-0 md:bg-transparent hover:bg-gray-700 transition-colors duration-200"
                                     >
-                                        {/* Mobile Card Layout */}
                                         <div className="flex gap-4 md:hidden">
                                             <img src={album.coverUrl} alt={album.title} className="w-20 h-20 object-cover rounded-md flex-shrink-0"/>
                                             <div className="flex flex-col justify-between w-full">
@@ -1079,7 +1063,6 @@
                                             </div>
                                         </div>
                                         
-                                        {/* Desktop Table Cells */}
                                         <div className="hidden md:table-cell p-3 align-middle rounded-l-lg">
                                             <div className="flex items-center gap-4">
                                                 <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
@@ -1112,12 +1095,8 @@
         // --- To Listen View Component ---
         function ToListen({ allAlbums, setAllAlbums, loading, onAlbumUpdated, setView, onSuggestAlbum }) {
             const albums = allAlbums.filter(a => !a.listened);
-
             const [viewMode, setViewMode] = useState('gallery');
-            const [editingAlbumId, setEditingAlbumId] = useState(null);
-            const [editFormData, setEditFormData] = useState({});
             const [lightboxAlbum, setLightboxAlbum] = useState(null);
-            const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, albumId: null });
             
             const handleToggleListened = async (albumId, currentStatus) => {
                 const newStatus = !currentStatus;
@@ -1130,35 +1109,6 @@
                 const albumRef = doc(db, "albums", albumId);
                 await updateDoc(albumRef, { listened: newStatus });
             };
-            
-            const handleDeleteRequest = (albumId) => setConfirmDelete({ isOpen: true, albumId: albumId });
-            const confirmDeletion = async () => {
-                if (confirmDelete.albumId) {
-                    await deleteDoc(doc(db, "albums", confirmDelete.albumId));
-                    onAlbumUpdated();
-                }
-                setConfirmDelete({ isOpen: false, albumId: null });
-            };
-            const cancelDeletion = () => setConfirmDelete({ isOpen: false, albumId: null });
-            const handleEditClick = (album) => {
-                setEditingAlbumId(album.id);
-                setEditFormData({
-                    title: album.title, artist: album.artist, coverUrl: album.coverUrl,
-                    releaseYear: album.releaseYear || new Date().getFullYear(),
-                });
-            };
-            const handleCancelEdit = () => setEditingAlbumId(null);
-            const handleSaveEdit = async (albumId) => {
-                const updatedData = { ...editFormData, releaseYear: Number(editFormData.releaseYear) };
-                const albumRef = doc(db, "albums", albumId);
-                await updateDoc(albumRef, updatedData);
-                setEditingAlbumId(null);
-                onAlbumUpdated();
-            };
-            const handleEditFormChange = (e) => {
-                const { name, value } = e.target;
-                setEditFormData(prev => ({ ...prev, [name]: value }));
-            };
 
             if (loading) return <p>Loading your listening queue...</p>;
             
@@ -1167,7 +1117,7 @@
 
             return (
                 <div>
-                    <button
+                     <button
                         onClick={onSuggestAlbum}
                         className="fixed bottom-42 right-6 bg-green-500 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
                         aria-label="Suggest an album"
@@ -1196,7 +1146,6 @@
                         </svg>
                     </button>
                     <Lightbox album={lightboxAlbum} onClose={() => setLightboxAlbum(null)} onToggleListened={handleToggleListened} />
-                    <ConfirmationModal isOpen={confirmDelete.isOpen} message="Are you sure you want to delete this album?" onConfirm={confirmDeletion} onCancel={cancelDeletion} />
                     
                      <div className="flex flex-col md:flex-row justify-between items-center mb-6">
                          <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Listening Queue ({albums.length})</h2>
@@ -1233,57 +1182,42 @@
                                     <div className="md:table-cell w-[40%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Album</div>
                                     <div className="md:table-cell w-[35%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Artist</div>
                                     <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Year</div>
-                                    <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Mark Listened</div>
-                                    <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-right">Actions</div>
+                                    <div className="md:table-cell w-[15%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Mark Listened</div>
                                 </div>
                             </div>
-                            
                             <div className="md:table-row-group">
-                            {albums.map((album) => {
-                                const isEditing = editingAlbumId === album.id;
-                                return isEditing ? (
-                                    <div key={album.id} className="md:table-row"><div className="md:table-cell md:p-0" colSpan="5"><div className="p-3 bg-indigo-900 bg-opacity-50 rounded-lg space-y-3">{/* Edit form can be copied from AlbumDisplay */}</div></div></div>
-                                ) : (
-                                    <div key={album.id} className="bg-gray-800 rounded-lg p-4 flex flex-col gap-3 md:table-row md:p-0 md:bg-transparent hover:bg-gray-700 transition-colors duration-200">
-                                        <div className="flex gap-4 md:hidden">
-                                            <img src={album.coverUrl} alt={album.title} className="w-20 h-20 object-cover rounded-md flex-shrink-0"/>
-                                            <div className="flex flex-col justify-between w-full">
-                                                <div>
-                                                    <h3 className="font-bold text-white text-lg">{album.title}</h3>
-                                                    <p className="text-sm text-gray-400">{album.artist}</p>
-                                                    <p className="text-xs text-gray-500">Released: {album.releaseYear || 'N/A'}</p>
-                                                </div>
-                                                <div className="flex gap-2 mt-2 self-end">
-                                                    <button onClick={() => handleToggleListened(album.id, album.listened)} className="p-2 rounded-md hover:bg-gray-600" title="Mark as Listened">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                                                    </button>
-                                                    <button onClick={() => handleEditClick(album)} className="p-2 rounded-md hover:bg-gray-600" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg></button>
-                                                    <button onClick={() => handleDeleteRequest(album.id)} className="p-2 rounded-md hover:bg-gray-600" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                                </div>
+                            {albums.map((album) => (
+                                <div key={album.id} className="bg-gray-800 rounded-lg p-4 flex flex-col gap-3 md:table-row md:p-0 md:bg-transparent hover:bg-gray-700 transition-colors duration-200">
+                                    <div className="flex gap-4 md:hidden">
+                                        <img src={album.coverUrl} alt={album.title} className="w-20 h-20 object-cover rounded-md flex-shrink-0"/>
+                                        <div className="flex flex-col justify-between w-full">
+                                            <div>
+                                                <h3 className="font-bold text-white text-lg">{album.title}</h3>
+                                                <p className="text-sm text-gray-400">{album.artist}</p>
+                                                <p className="text-xs text-gray-500">Released: {album.releaseYear || 'N/A'}</p>
                                             </div>
-                                        </div>
-                                        <div className="hidden md:table-cell p-3 align-middle rounded-l-lg">
-                                            <div className="flex items-center gap-4">
-                                                <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
-                                                <span className="font-bold text-white">{album.title}</span>
-                                            </div>
-                                        </div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.artist}</div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.releaseYear || 'N/A'}</div>
-                                        <div className="hidden md:table-cell p-3 text-center align-middle">
-                                            <button onClick={() => handleToggleListened(album.id, album.listened)} title="Mark as Listened" className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-300 focus:outline-none bg-gray-600`}>
-                                                <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 translate-x-1`} />
-                                            </button>
-                                        </div>
-                                        <div className="hidden md:table-cell p-3 text-right rounded-r-lg align-middle">
-                                            <div className="flex justify-end gap-2">
-                                                 <button onClick={() => handleEditClick(album)} className="p-2 rounded-md hover:bg-gray-700" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg></button>
-                                                 <button onClick={() => handleDeleteRequest(album.id)} className="p-2 rounded-md hover:bg-gray-700" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                            <div className="flex gap-2 mt-2 self-end">
+                                                <button onClick={() => handleToggleListened(album.id, album.listened)} className="p-2 rounded-md hover:bg-gray-600" title="Mark as Listened">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
-                                )
-                            })}
+                                    <div className="hidden md:table-cell p-3 align-middle rounded-l-lg">
+                                        <div className="flex items-center gap-4">
+                                            <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
+                                            <span className="font-bold text-white">{album.title}</span>
+                                        </div>
+                                    </div>
+                                    <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.artist}</div>
+                                    <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.releaseYear || 'N/A'}</div>
+                                    <div className="hidden md:table-cell p-3 text-center align-middle rounded-r-lg">
+                                        <button onClick={() => handleToggleListened(album.id, album.listened)} title="Mark as Listened" className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-300 focus:outline-none bg-gray-600`}>
+                                            <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 translate-x-1`} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                             </div>
                         </div>
                     )}
@@ -1291,10 +1225,9 @@
             );
         }
 
-        // --- Search Component ---
         function Search({ albums, onCancel }) {
             const [searchTerm, setSearchTerm] = useState('');
-            const [searchType, setSearchType] = useState('title'); // 'title', 'artist', or 'barcode'
+            const [searchType, setSearchType] = useState('title');
             const [results, setResults] = useState([]);
             const [hasSearched, setHasSearched] = useState(false);
             const [alertMessage, setAlertMessage] = useState('');
