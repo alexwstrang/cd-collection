@@ -352,7 +352,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.12</span>
+                            <span className="font-mono text-xs text-gray-500">v0.13</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -396,7 +396,7 @@
             );
         }
         
-        // --- Barcode Scanner Component ---
+       // --- Barcode Scanner Component ---
         function BarcodeScanner({ onScanSuccess, onCancel }) {
             useEffect(() => {
                 const html5QrCode = new Html5Qrcode("reader");
@@ -408,9 +408,21 @@
                         });
                 };
         
-                const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+                // This config tells the scanner what to look for and how often.
+                const scannerConfig = { 
+                    fps: 10, 
+                    qrbox: { width: 250, height: 150 } 
+                };
+
+                // This config tells the browser what kind of camera and video stream to request.
+                // Requesting a standard HD resolution helps stabilize autofocus on iPhones.
+                const cameraConfig = { 
+                    facingMode: "environment",
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                };
         
-                html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
+                html5QrCode.start(cameraConfig, scannerConfig, qrCodeSuccessCallback)
                     .catch(err => { 
                         console.error("Unable to start scanning.", err);
                         onCancel(); 
