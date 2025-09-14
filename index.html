@@ -90,13 +90,13 @@
 
         // --- Firebase Configuration ---
         const firebaseConfig = {
-  apiKey: "AIzaSyBoo2YQkIy0jMw8IalLJ8PrI-YAQMYP8B8",
-  authDomain: "cd-collection-bb9a9.firebaseapp.com",
-  projectId: "cd-collection-bb9a9",
-  storageBucket: "cd-collection-bb9a9.firebasestorage.app",
-  messagingSenderId: "687978567961",
-  appId: "1:687978567961:web:9f26cc777aaf5e43228d88"
-};
+            apiKey: "AIzaSyBoo2YQkIy0jMw8IalLJ8PrI-YAQMYP8B8",
+            authDomain: "cd-collection-bb9a9.firebaseapp.com",
+            projectId: "cd-collection-bb9a9",
+            storageBucket: "cd-collection-bb9a9.firebasestorage.app",
+            messagingSenderId: "687978567961",
+            appId: "1:687978567961:web:9f26cc777aaf5e43228d88"
+        };
 
         // --- Discogs API Configuration ---
         // IMPORTANT: PASTE YOUR DISCOGS PERSONAL ACCESS TOKEN HERE
@@ -258,7 +258,7 @@
                 <div className="p-4 md:p-8">
                     <Navbar user={user} setView={setView} currentView={view} />
                     <main className="mt-8">
-                        {view === 'add' && <AddAlbum albums={albums} onAlbumAdded={handleAlbumsChanged} onCancel={() => setView('gallery')} />}
+                        {view === 'add' && <AddAlbum onAlbumAdded={handleAlbumsChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats albums={albums} loading={loadingAlbums} />}
                         {view === 'gallery' && <AlbumDisplay albums={albums} setAlbums={setAlbums} loading={loadingAlbums} onAlbumUpdated={fetchAlbums} setView={setView} />}
                         {view === 'search' && <Search albums={albums} onCancel={() => setView('gallery')} />}
@@ -303,7 +303,6 @@
                         <nav className="hidden md:flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                             <NavLink view="gallery">Collection</NavLink>
                             <NavLink view="stats">Stats</NavLink>
-                            <NavLink view="search">Search</NavLink>
                             <NavLink view="add">+ Add Album</NavLink>
                         </nav>
                         <div className="hidden md:flex items-center space-x-4">
@@ -318,7 +317,6 @@
                             <nav className="flex flex-col space-y-2">
                                 <NavLink view="gallery">Collection</NavLink>
                                 <NavLink view="stats">Stats</NavLink>
-                                <NavLink view="search">Search</NavLink>
                                 <NavLink view="add">+ Add Album</NavLink>
                             </nav>
                             <div className="border-t border-gray-700 mt-4 pt-4 flex flex-col items-start space-y-3">
@@ -380,19 +378,16 @@
         }
 
         // --- Add Single Album Component ---
-        function AddAlbum({ albums, onAlbumAdded, onCancel }) {
+        function AddAlbum({ onAlbumAdded, onCancel }) {
             const [barcode, setBarcode] = useState('');
             const [albumData, setAlbumData] = useState(null);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState('');
-            const [isAddingNewGenre, setIsAddingNewGenre] = useState(false);
             const [isManualAdd, setIsManualAdd] = useState(false);
             const [isScanning, setIsScanning] = useState(false);
             const [manualFormData, setManualFormData] = useState({
-                title: '', artist: '', genre: '', trackCount: 0, coverUrl: '', releaseYear: new Date().getFullYear(), listened: false,
+                title: '', artist: '', coverUrl: '', releaseYear: new Date().getFullYear(), listened: false,
             });
-
-            const allGenres = useMemo(() => [...new Set(albums.map(b => b.genre))], [albums]);
 
             const handleBarcodeSearch = useCallback(async (searchBarcode) => {
                 setLoading(true);
@@ -424,8 +419,6 @@
                         setAlbumData({
                             title: title || result.title,
                             artist: artist || 'N/A',
-                            genre: result.genre ? result.genre[0] : 'General',
-                            trackCount: 0, // Discogs search API doesn't provide track count
                             releaseYear: result.year || 'N/A',
                             coverUrl: result.cover_image,
                             listened: false,
@@ -458,8 +451,6 @@
                 const albumToSave = {
                     title: albumData.title,
                     artist: albumData.artist,
-                    genre: albumData.genre,
-                    trackCount: Number(albumData.trackCount) || 0,
                     releaseYear: Number(albumData.releaseYear) || 0,
                     coverUrl: albumData.coverUrl,
                     barcode: sanitizeBarcode(barcode),
@@ -488,8 +479,6 @@
                 const albumToSave = {
                     title: manualFormData.title,
                     artist: manualFormData.artist,
-                    genre: manualFormData.genre,
-                    trackCount: Number(manualFormData.trackCount) || 0,
                     coverUrl: manualFormData.coverUrl || `https://placehold.co/250x250/1f2937/ffffff?text=${manualFormData.title.split(' ').join('+')}`,
                     userId: auth.currentUser.uid,
                     barcode: '', 
@@ -500,7 +489,7 @@
                 try {
                     await addDoc(collection(db, "albums"), albumToSave);
                     setIsManualAdd(false);
-                    setManualFormData({ title: '', artist: '', genre: '', trackCount: 0, coverUrl: '', releaseYear: new Date().getFullYear(), listened: false });
+                    setManualFormData({ title: '', artist: '', coverUrl: '', releaseYear: new Date().getFullYear(), listened: false });
                     onAlbumAdded();
                 } catch (err) {
                     console.error("Error adding manual album:", err);
@@ -511,35 +500,13 @@
             const handleAlbumDataChange = (e) => {
                 const { name, value, type, checked } = e.target;
                 const val = type === 'checkbox' ? checked : value;
-
-                if (name === 'genreSelect') {
-                    if (value === 'add-new') {
-                        setIsAddingNewGenre(true);
-                        setAlbumData(prev => ({ ...prev, genre: '' }));
-                    } else {
-                        setIsAddingNewGenre(false);
-                        setAlbumData(prev => ({ ...prev, genre: value }));
-                    }
-                } else {
-                    setAlbumData(prev => ({ ...prev, [name]: val }));
-                }
+                setAlbumData(prev => ({ ...prev, [name]: val }));
             };
 
             const handleManualFormChange = (e) => {
                 const { name, value, type, checked } = e.target;
                 const val = type === 'checkbox' ? checked : value;
-
-                if (name === 'genreSelect') {
-                    if (value === 'add-new') {
-                        setIsAddingNewGenre(true);
-                        setManualFormData(prev => ({ ...prev, genre: '' }));
-                    } else {
-                        setIsAddingNewGenre(false);
-                        setManualFormData(prev => ({ ...prev, genre: value }));
-                    }
-                } else {
-                    setManualFormData(prev => ({ ...prev, [name]: val }));
-                }
+                setManualFormData(prev => ({ ...prev, [name]: val }));
             };
 
             const handleToggleManualAdd = () => {
@@ -608,33 +575,16 @@
                                          <label className="block text-sm font-medium text-gray-400">Cover Art URL</label>
                                          <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                                      </div>
-                                     <div className="grid grid-cols-2 gap-4">
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Release Year</label>
-                                             <input type="number" name="releaseYear" value={manualFormData.releaseYear} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" />
-                                         </div>
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Tracks</label>
-                                             <input type="number" name="trackCount" value={manualFormData.trackCount} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                         </div>
-                                     </div>
                                      <div>
-                                         <label className="block text-sm font-medium text-gray-400">Genre</label>
-                                         <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                             <option value="" disabled>Select a genre</option>
-                                             {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
-                                             <option value="add-new">--- Add New Genre ---</option>
-                                         </select>
-                                         {isAddingNewGenre && (
-                                             <input type="text" name="genre" placeholder="New Genre" value={manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
-                                         )}
+                                         <label className="block text-sm font-medium text-gray-400">Release Year</label>
+                                         <input type="number" name="releaseYear" value={manualFormData.releaseYear} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" />
                                      </div>
                                      <div className="flex items-center">
-                                        <input type="checkbox" id="listenedManual" name="listened" checked={manualFormData.listened} onChange={handleManualFormChange} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500"/>
-                                        <label htmlFor="listenedManual" className="ml-2 block text-sm text-gray-300">I have listened to this album</label>
-                                    </div>
+                                         <input type="checkbox" id="listenedManual" name="listened" checked={manualFormData.listened} onChange={handleManualFormChange} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500"/>
+                                         <label htmlFor="listenedManual" className="ml-2 block text-sm text-gray-300">I have listened to this album</label>
+                                     </div>
                                      <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Album</button>
-                                 </form>
+                                  </form>
                             )}
 
                             {albumData && !isManualAdd && (
@@ -647,27 +597,11 @@
                                             <h3 className="text-2xl font-bold">{albumData.title}</h3>
                                             <p className="text-gray-400">by {albumData.artist}</p>
                                             
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-400">Release Year</label>
-                                                    <input type="number" name="releaseYear" value={albumData.releaseYear} onChange={handleAlbumDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-400">Tracks</label>
-                                                    <input type="number" name="trackCount" value={albumData.trackCount} onChange={handleAlbumDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                                </div>
-                                            </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-400">Genre</label>
-                                                <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : albumData.genre} onChange={handleAlbumDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                                    <option value={albumData.genre}>{albumData.genre}</option>
-                                                    {allGenres.filter(g => g !== albumData.genre).map(g => <option key={g} value={g}>{g}</option>)}
-                                                    <option value="add-new">--- Add New Genre ---</option>
-                                                </select>
-                                                {isAddingNewGenre && (
-                                                    <input type="text" name="genre" placeholder="New Genre" value={albumData.genre} onChange={handleAlbumDataChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
-                                                )}
+                                                <label className="block text-sm font-medium text-gray-400">Release Year</label>
+                                                <input type="number" name="releaseYear" value={albumData.releaseYear} onChange={handleAlbumDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                                             </div>
+
                                             <div className="flex items-center">
                                                 <input type="checkbox" id="listenedAPI" name="listened" checked={albumData.listened} onChange={handleAlbumDataChange} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500"/>
                                                 <label htmlFor="listenedAPI" className="ml-2 block text-sm text-gray-300">I have listened to this album</label>
@@ -721,15 +655,6 @@
             const stats = useMemo(() => {
                 if (albums.length === 0) return null;
 
-                const albumsWithTracks = albums.filter(b => b.trackCount > 0);
-                const totalTracks = albums.reduce((acc, album) => acc + Number(album.trackCount || 0), 0);
-                const averageTrackCount = albumsWithTracks.length > 0 ? Math.round(totalTracks / albumsWithTracks.length) : 0;
-                
-                const genreCounts = albums.reduce((acc, album) => {
-                    if (album.genre) acc[album.genre] = (acc[album.genre] || 0) + 1;
-                    return acc;
-                }, {});
-
                 const artistCounts = albums.reduce((acc, album) => {
                     acc[album.artist] = (acc[album.artist] || 0) + 1;
                     return acc;
@@ -748,30 +673,16 @@
                 }, {});
 
                 return {
-                    total: albums.length, totalTracks, genreCounts, listenedCount,
-                    topArtists, averageTrackCount, uniqueArtists, albumsByDecade
+                    total: albums.length, listenedCount,
+                    topArtists, uniqueArtists, albumsByDecade
                 };
             }, [albums]);
 
             useEffect(() => {
-                let genreChart, decadeChart, listenedChart;
+                let decadeChart, listenedChart;
                 const chartInstances = [];
 
                 if (stats) {
-                    const genreCtx = document.getElementById('genre-chart')?.getContext('2d');
-                    if (genreCtx && Object.keys(stats.genreCounts).length > 0) {
-                        const sortedGenres = Object.entries(stats.genreCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-                        genreChart = new Chart(genreCtx, {
-                            type: 'bar',
-                            data: {
-                                labels: sortedGenres.map(item => item[0]),
-                                datasets: [{ label: 'Albums per Genre', data: sortedGenres.map(item => item[1]), backgroundColor: '#818cf8' }]
-                            },
-                            options: { indexAxis: 'y', scales: { y: { ticks: { color: 'white' } }, x: { ticks: { color: 'white', stepSize: 1 }, grid: { color: '#4b5563' } } }, plugins: { legend: { display: false }} }
-                        });
-                        chartInstances.push(genreChart);
-                    }
-
                     const decadeCtx = document.getElementById('decade-chart')?.getContext('2d');
                     if (decadeCtx) {
                         const sortedDecades = Object.keys(stats.albumsByDecade).sort();
@@ -831,13 +742,12 @@
                     {!stats ? (
                         <p className="text-gray-400">No albums in the collection yet. Add one to see your stats!</p>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Albums</h3><p className="text-5xl font-bold text-indigo-400">{stats.total}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Albums Listened To</h3><p className="text-5xl font-bold text-indigo-400">{stats.listenedCount}</p></div>
-                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Avg. Tracks/Album</h3><p className="text-5xl font-bold text-indigo-400">{stats.averageTrackCount.toLocaleString()}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Unique Artists</h3><p className="text-5xl font-bold text-indigo-400">{stats.uniqueArtists}</p></div>
                             
-                            <div className="md:col-span-2 p-4 bg-gray-800 rounded-lg">
+                            <div className="md:col-span-2 lg:col-span-1 p-4 bg-gray-800 rounded-lg">
                                 <h3 className="font-bold text-lg mb-4">Top Artists</h3>
                                 <ol className="space-y-3">
                                     {stats.topArtists.map(([artist, count], index) => (
@@ -852,11 +762,9 @@
                                 </ol>
                             </div>
 
-                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Listened vs. Unlistened</h3><canvas id="listened-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-1 lg:col-span-2"><h3 className="font-bold text-lg mb-2">Listened vs. Unlistened</h3><canvas id="listened-chart"></canvas></div>
                             
-                            <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="genre-chart"></canvas></div>
-                            <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Albums by Decade</h3><canvas id="decade-chart"></canvas></div>
-
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2 lg:col-span-3"><h3 className="font-bold text-lg mb-2">Albums by Decade</h3><canvas id="decade-chart"></canvas></div>
                         </div>
                     )}
                 </div>
@@ -875,8 +783,6 @@
                             <h2 className="text-2xl font-bold text-white mb-2">{album.title}</h2>
                             <p className="text-lg text-gray-300 mb-4">{album.artist}</p>
                             <div className="space-y-2 text-sm">
-                                <p><span className="font-bold text-gray-400">Genre:</span> {album.genre}</p>
-                                <p><span className="font-bold text-gray-400">Tracks:</span> {album.trackCount > 0 ? album.trackCount : 'N/A'}</p>
                                 <p><span className="font-bold text-gray-400">Released:</span> {album.releaseYear > 0 ? album.releaseYear : 'N/A'}</p>
                                 <p><span className="font-bold text-gray-400">Status:</span> {album.listened ? 'Listened' : 'Not Listened'}</p>
                             </div>
@@ -893,11 +799,8 @@
             const [editingAlbumId, setEditingAlbumId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
             const [lightboxAlbum, setLightboxAlbum] = useState(null);
-            const [isEditingNewGenre, setIsEditingNewGenre] = useState(false);
             const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, albumId: null });
             
-            const allGenres = useMemo(() => [...new Set(albums.map(b => b.genre))], [albums]);
-
             const handleToggleListened = async (albumId, currentStatus) => {
                 const newStatus = !currentStatus;
                 setAlbums(albums.map(a => a.id === albumId ? { ...a, listened: newStatus } : a));
@@ -928,42 +831,27 @@
                     artist: album.artist,
                     coverUrl: album.coverUrl,
                     releaseYear: album.releaseYear || new Date().getFullYear(),
-                    trackCount: album.trackCount || 0,
-                    genre: album.genre,
                 });
             };
 
             const handleCancelEdit = () => {
                 setEditingAlbumId(null);
-                setIsEditingNewGenre(false);
             };
 
             const handleSaveEdit = async (albumId) => {
                 const updatedData = {
                     ...editFormData,
-                    trackCount: Number(editFormData.trackCount),
                     releaseYear: Number(editFormData.releaseYear),
                 };
                 const albumRef = doc(db, "albums", albumId);
                 await updateDoc(albumRef, updatedData);
                 setEditingAlbumId(null);
-                setIsEditingNewGenre(false);
                 onAlbumUpdated();
             };
 
             const handleEditFormChange = (e) => {
                 const { name, value } = e.target;
-                if (name === 'genreSelect') {
-                    if (value === 'add-new') {
-                        setIsEditingNewGenre(true);
-                        setEditFormData(prev => ({ ...prev, genre: '' }));
-                    } else {
-                        setIsEditingNewGenre(false);
-                        setEditFormData(prev => ({ ...prev, genre: value }));
-                    }
-                } else {
-                    setEditFormData(prev => ({ ...prev, [name]: value }));
-                }
+                setEditFormData(prev => ({ ...prev, [name]: value }));
             };
 
             if (loading) return <p>Loading collection...</p>;
@@ -974,8 +862,17 @@
             return (
                 <div>
                     <button
+                        onClick={() => setView('search')}
+                        className="fixed bottom-24 right-6 bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
+                        aria-label="Search collection"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </button>
+                    <button
                         onClick={() => setView('add')}
-                        className="md:hidden fixed bottom-6 right-6 bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
+                        className="fixed bottom-6 right-6 bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
                         aria-label="Add new album"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1022,11 +919,9 @@
                         <div className="space-y-4 md:space-y-0 md:border-separate md:min-w-full" style={{ borderSpacing: '0 0.75rem' }}>
                             <div className="hidden md:table-header-group">
                                 <div className="md:table-row">
-                                    <div className="md:table-cell w-[30%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Album</div>
-                                    <div className="md:table-cell w-[25%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Artist</div>
+                                    <div className="md:table-cell w-[40%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Album</div>
+                                    <div className="md:table-cell w-[35%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Artist</div>
                                     <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Year</div>
-                                    <div className="md:table-cell w-[15%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Genre</div>
-                                    <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Tracks</div>
                                     <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Listened</div>
                                     <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-right">Actions</div>
                                 </div>
@@ -1036,36 +931,19 @@
                             {albums.map((album) => {
                                 const isEditing = editingAlbumId === album.id;
                                 return isEditing ? (
-                                    <div key={album.id} className="md:table-row"><div className="md:table-cell md:p-0" colSpan="7"><div className="p-3 bg-indigo-900 bg-opacity-50 rounded-lg space-y-3">
+                                    <div key={album.id} className="md:table-row"><div className="md:table-cell md:p-0" colSpan="5"><div className="p-3 bg-indigo-900 bg-opacity-50 rounded-lg space-y-3">
                                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-                                            <div className="md:col-span-2">
+                                            <div className="md:col-span-3">
                                                 <label className="block text-xs font-medium text-gray-400">Title</label>
                                                 <input type="text" name="title" value={editFormData.title} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
                                             </div>
-                                            <div>
+                                            <div className="md:col-span-2">
                                                 <label className="block text-xs font-medium text-gray-400">Artist</label>
                                                 <input type="text" name="artist" value={editFormData.artist} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400">Genre</label>
-                                                <select name="genreSelect" value={isEditingNewGenre ? 'add-new' : editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white">
-                                                    <option value={editFormData.genre}>{editFormData.genre}</option>
-                                                    {allGenres.filter(g => g !== editFormData.genre).map(g => <option key={g} value={g}>{g}</option>)}
-                                                    <option value="add-new">--- Add New ---</option>
-                                                </select>
-                                                {isEditingNewGenre && (
-                                                    <input type="text" name="genre" placeholder="New Genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"/>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-400">Year</label>
-                                                    <input type="number" name="releaseYear" value={editFormData.releaseYear} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-400">Tracks</label>
-                                                    <input type="number" name="trackCount" value={editFormData.trackCount} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                                </div>
+                                                <label className="block text-xs font-medium text-gray-400">Year</label>
+                                                <input type="number" name="releaseYear" value={editFormData.releaseYear} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
                                             </div>
                                         </div>
                                         <div className="flex justify-end gap-2">
@@ -1085,7 +963,7 @@
                                                 <div>
                                                     <h3 className="font-bold text-white text-lg">{album.title}</h3>
                                                     <p className="text-sm text-gray-400">{album.artist}</p>
-                                                    <p className="text-xs text-gray-500">{album.genre} &bull; {album.trackCount} tracks</p>
+                                                    <p className="text-xs text-gray-500">Released: {album.releaseYear || 'N/A'}</p>
                                                 </div>
                                                 <div className="flex gap-2 mt-2 self-end">
                                                     <button onClick={() => handleEditClick(album)} className="p-2 rounded-md hover:bg-gray-600" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg></button>
@@ -1103,8 +981,6 @@
                                         </div>
                                         <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.artist}</div>
                                         <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.releaseYear || 'N/A'}</div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.genre}</div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle text-center">{album.trackCount > 0 ? album.trackCount : 'N/A'}</div>
                                         <div className="hidden md:table-cell p-3 text-center align-middle">
                                             <input type="checkbox" checked={!!album.listened} onChange={() => handleToggleListened(album.id, album.listened)} className="h-5 w-5 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500 cursor-pointer"/>
                                         </div>
