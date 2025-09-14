@@ -262,7 +262,7 @@
                     <main className="mt-8">
                         {view === 'add' && <AddAlbum albums={albums} onAlbumAdded={handleAlbumsChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats albums={albums} loading={loadingAlbums} />}
-                        {view === 'gallery' && <AlbumDisplay albums={albums} loading={loadingAlbums} onAlbumUpdated={fetchAlbums} setView={setView} />}
+                        {view === 'gallery' && <AlbumDisplay albums={albums} setAlbums={setAlbums} loading={loadingAlbums} onAlbumUpdated={fetchAlbums} setView={setView} />}
                         {view === 'search' && <Search albums={albums} onCancel={() => setView('gallery')} />}
                     </main>
                 </div>
@@ -289,7 +289,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v1.0</span>
+                            <span className="font-mono text-xs text-gray-500">v1.1</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -391,7 +391,7 @@
             const [isManualAdd, setIsManualAdd] = useState(false);
             const [isScanning, setIsScanning] = useState(false);
             const [manualFormData, setManualFormData] = useState({
-                title: '', artist: '', genre: '', trackCount: 0, coverUrl: '', country: '', releaseYear: new Date().getFullYear(),
+                title: '', artist: '', genre: '', trackCount: 0, coverUrl: '', releaseYear: new Date().getFullYear(), listened: false,
             });
 
             const allGenres = useMemo(() => [...new Set(albums.map(b => b.genre))], [albums]);
@@ -403,14 +403,13 @@
                 setIsManualAdd(false);
                 try {
                     const sanitized = sanitizeBarcode(searchBarcode);
-                    // --- MusicBrainz API Call ---
                     const url = `https://musicbrainz.org/ws/2/release/?query=barcode:${sanitized}&fmt=json`;
                     const response = await fetch(url);
                     const data = await response.json();
 
                     if (data.releases && data.releases.length > 0) {
                         const release = data.releases[0];
-                        const releaseId = release.id; // MusicBrainz ID (MBID)
+                        const releaseId = release.id;
                         const title = release.title || 'No Title Provided';
                         
                         setAlbumData({
@@ -419,8 +418,8 @@
                             genre: release.tags && release.tags.length > 0 ? parseMusicGenre(release.tags) : 'General',
                             trackCount: release.media && release.media.length > 0 ? release.media[0]['track-count'] : 0,
                             releaseYear: release.date ? new Date(release.date).getFullYear() : 'N/A',
-                            coverUrl: `https://coverartarchive.org/release/${releaseId}/front-250`, // Using 250px version
-                            country: release['artist-credit'][0].artist.country || '',
+                            coverUrl: `https://coverartarchive.org/release/${releaseId}/front-250`,
+                            listened: false,
                         });
                     } else {
                         setError('Album not found for this barcode.');
@@ -454,9 +453,9 @@
                     trackCount: Number(albumData.trackCount) || 0,
                     releaseYear: Number(albumData.releaseYear) || 0,
                     coverUrl: albumData.coverUrl,
-                    country: albumData.country,
                     barcode: sanitizeBarcode(barcode),
                     userId: auth.currentUser.uid,
+                    listened: albumData.listened,
                 };
 
                 try {
@@ -483,16 +482,16 @@
                     genre: manualFormData.genre,
                     trackCount: Number(manualFormData.trackCount) || 0,
                     coverUrl: manualFormData.coverUrl || `https://placehold.co/250x250/1f2937/ffffff?text=${manualFormData.title.split(' ').join('+')}`,
-                    country: manualFormData.country,
                     userId: auth.currentUser.uid,
                     barcode: '', 
                     releaseYear: Number(manualFormData.releaseYear) || 0,
+                    listened: manualFormData.listened,
                 };
 
                 try {
                     await addDoc(collection(db, "albums"), albumToSave);
                     setIsManualAdd(false);
-                    setManualFormData({ title: '', artist: '', genre: '', trackCount: 0, coverUrl: '', country: '', releaseYear: new Date().getFullYear() });
+                    setManualFormData({ title: '', artist: '', genre: '', trackCount: 0, coverUrl: '', releaseYear: new Date().getFullYear(), listened: false });
                     onAlbumAdded();
                 } catch (err) {
                     console.error("Error adding manual album:", err);
@@ -501,7 +500,9 @@
             };
             
             const handleAlbumDataChange = (e) => {
-                const { name, value } = e.target;
+                const { name, value, type, checked } = e.target;
+                const val = type === 'checkbox' ? checked : value;
+
                 if (name === 'genreSelect') {
                     if (value === 'add-new') {
                         setIsAddingNewGenre(true);
@@ -511,12 +512,14 @@
                         setAlbumData(prev => ({ ...prev, genre: value }));
                     }
                 } else {
-                    setAlbumData(prev => ({ ...prev, [name]: value }));
+                    setAlbumData(prev => ({ ...prev, [name]: val }));
                 }
             };
 
             const handleManualFormChange = (e) => {
-                const { name, value } = e.target;
+                const { name, value, type, checked } = e.target;
+                const val = type === 'checkbox' ? checked : value;
+
                 if (name === 'genreSelect') {
                     if (value === 'add-new') {
                         setIsAddingNewGenre(true);
@@ -526,7 +529,7 @@
                         setManualFormData(prev => ({ ...prev, genre: value }));
                     }
                 } else {
-                    setManualFormData(prev => ({ ...prev, [name]: value }));
+                    setManualFormData(prev => ({ ...prev, [name]: val }));
                 }
             };
 
@@ -617,10 +620,10 @@
                                              <input type="text" name="genre" placeholder="New Genre" value={manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
                                          )}
                                      </div>
-                                     <div>
-                                         <label className="block text-sm font-medium text-gray-400">Artist's Country</label>
-                                         <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                     </div>
+                                     <div className="flex items-center">
+                                        <input type="checkbox" id="listenedManual" name="listened" checked={manualFormData.listened} onChange={handleManualFormChange} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500"/>
+                                        <label htmlFor="listenedManual" className="ml-2 block text-sm text-gray-300">I have listened to this album</label>
+                                    </div>
                                      <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Album</button>
                                  </form>
                             )}
@@ -656,9 +659,9 @@
                                                     <input type="text" name="genre" placeholder="New Genre" value={albumData.genre} onChange={handleAlbumDataChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
                                                 )}
                                             </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-400">Artist's Country</label>
-                                                <input type="text" name="country" value={albumData.country} onChange={handleAlbumDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                            <div className="flex items-center">
+                                                <input type="checkbox" id="listenedAPI" name="listened" checked={albumData.listened} onChange={handleAlbumDataChange} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500"/>
+                                                <label htmlFor="listenedAPI" className="ml-2 block text-sm text-gray-300">I have listened to this album</label>
                                             </div>
                                             <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Album</button>
                                         </div>
@@ -671,37 +674,6 @@
             );
         }
         
-        // --- Country Albums Modal Component ---
-        function CountryAlbumsModal({ isOpen, country, albums, onClose }) {
-            if (!isOpen) return null;
-
-            return (
-                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-gray-800 p-6 rounded-lg max-w-2xl w-full flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold text-white">Albums from {country}</h2>
-                            <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
-                        </div>
-                        <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2">
-                            {albums.length > 0 ? albums.map(album => (
-                                <div key={album.id} className="flex items-start gap-4 p-3 bg-gray-700 rounded-lg">
-                                    <img src={album.coverUrl} alt={album.title} className="w-12 h-12 object-cover rounded-md flex-shrink-0"/>
-                                    <div>
-                                        <p className="font-bold text-white">{album.title}</p>
-                                        <p className="text-sm text-gray-300">{album.artist}</p>
-                                        <p className="text-xs text-gray-500">Released in {album.releaseYear}</p>
-                                    </div>
-                                </div>
-                            )) : (
-                                <p className="text-gray-400">No albums found for this country.</p>
-                            )}
-                        </div>
-                        <button onClick={onClose} className="mt-2 ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
-                    </div>
-                </div>
-            );
-        }
-
         // --- Decade Albums Modal Component ---
         function DecadeAlbumsModal({ isOpen, decade, albums, onClose }) {
             if (!isOpen) return null;
@@ -735,7 +707,6 @@
 
        // --- Stats Component ---
         function Stats({ albums, loading }) {
-            const [modalData, setModalData] = useState({ isOpen: false, country: '', albums: [] });
             const [decadeModalData, setDecadeModalData] = useState({ isOpen: false, decade: '', albums: [] });
             
             const stats = useMemo(() => {
@@ -755,11 +726,9 @@
                     return acc;
                 }, {});
                 
-                const topArtists = Object.entries(artistCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 10);
-                
+                const topArtists = Object.entries(artistCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
                 const uniqueArtists = new Set(albums.map(b => b.artist)).size;
+                const listenedCount = albums.filter(a => a.listened).length;
                 
                 const albumsByDecade = albums.reduce((acc, album) => {
                     if (album.releaseYear && !isNaN(album.releaseYear)) {
@@ -768,22 +737,15 @@
                     }
                     return acc;
                 }, {});
-                
-                const albumsByCountry = albums.reduce((acc, album) => {
-                    if (album.country) {
-                        acc[album.country] = (acc[album.country] || 0) + 1;
-                    }
-                    return acc;
-                }, {});
 
                 return {
-                    total: albums.length, totalTracks, genreCounts,
-                    topArtists, averageTrackCount, uniqueArtists, albumsByDecade, albumsByCountry
+                    total: albums.length, totalTracks, genreCounts, listenedCount,
+                    topArtists, averageTrackCount, uniqueArtists, albumsByDecade
                 };
             }, [albums]);
 
             useEffect(() => {
-                let genreChart, decadeChart, countryChart;
+                let genreChart, decadeChart, listenedChart;
                 const chartInstances = [];
 
                 if (stats) {
@@ -818,17 +780,10 @@
                                         const clickedDecade = parseInt(clickedDecadeLabel);
                                         const albumsFromDecade = albums.filter(album => album.releaseYear && Math.floor(album.releaseYear / 10) * 10 === clickedDecade);
                                         
-                                        setDecadeModalData({
-                                            isOpen: true,
-                                            decade: clickedDecadeLabel,
-                                            albums: albumsFromDecade
-                                        });
+                                        setDecadeModalData({ isOpen: true, decade: clickedDecadeLabel, albums: albumsFromDecade });
                                     }
                                 },
-                                onHover: (event, chartElement) => {
-                                    const canvas = event.native.target;
-                                    canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
-                                },
+                                onHover: (event, chartElement) => { event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default'; },
                                 scales: { y: { ticks: { color: 'white', stepSize: 1 }, grid: { color: '#4b5563' } }, x: { ticks: { color: 'white' } } }, 
                                 plugins: { legend: { display: false }}
                             }
@@ -836,65 +791,30 @@
                         chartInstances.push(decadeChart);
                     }
                     
-                    const countryCtx = document.getElementById('country-chart')?.getContext('2d');
-                    if (countryCtx && Object.keys(stats.albumsByCountry).length > 0) {
-                        countryChart = new Chart(countryCtx, {
+                    const listenedCtx = document.getElementById('listened-chart')?.getContext('2d');
+                    if (listenedCtx) {
+                        listenedChart = new Chart(listenedCtx, {
                             type: 'pie',
                             data: {
-                                labels: Object.keys(stats.albumsByCountry),
-                                datasets: [{ data: Object.values(stats.albumsByCountry) }]
+                                labels: ['Listened', 'Not Listened'],
+                                datasets: [{ data: [stats.listenedCount, stats.total - stats.listenedCount], backgroundColor: ['#818cf8', '#4b5563'], borderColor: '#1f2937' }]
                             },
-                            options: {
-                                onClick: (event, elements, chart) => {
-                                    if (elements.length > 0) {
-                                        const elementIndex = elements[0].index;
-                                        const clickedCountry = chart.data.labels[elementIndex];
-                                        const albumsFromCountry = albums.filter(album => album.country === clickedCountry);
-                                        
-                                        setModalData({
-                                            isOpen: true,
-                                            country: clickedCountry,
-                                            albums: albumsFromCountry
-                                        });
-                                    }
-                                },
-                                onHover: (event, chartElement) => {
-                                    const canvas = event.native.target;
-                                    canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
-                                },
-                                plugins: { legend: { labels: { color: 'white' }}}
-                            }
+                            options: { plugins: { legend: { labels: { color: 'white' }}} }
                         });
-                        chartInstances.push(countryChart);
+                        chartInstances.push(listenedChart);
                     }
                 }
 
-                return () => {
-                    chartInstances.forEach(chart => {
-                        if (chart) chart.destroy();
-                    });
-                };
+                return () => { chartInstances.forEach(chart => { if (chart) chart.destroy(); }); };
             }, [stats, albums]);
 
-            const handleCloseModal = () => setModalData({ isOpen: false, country: '', albums: [] });
             const handleCloseDecadeModal = () => setDecadeModalData({ isOpen: false, decade: '', albums: [] });
 
             if (loading) return <p>Loading stats...</p>;
 
             return (
                 <div>
-                    <CountryAlbumsModal
-                        isOpen={modalData.isOpen}
-                        country={modalData.country}
-                        albums={modalData.albums}
-                        onClose={handleCloseModal}
-                    />
-                    <DecadeAlbumsModal
-                        isOpen={decadeModalData.isOpen}
-                        decade={decadeModalData.decade}
-                        albums={decadeModalData.albums}
-                        onClose={handleCloseDecadeModal}
-                    />
+                    <DecadeAlbumsModal isOpen={decadeModalData.isOpen} decade={decadeModalData.decade} albums={decadeModalData.albums} onClose={handleCloseDecadeModal} />
                     <div className="flex items-center gap-4 mb-6">
                         <h2 className="text-2xl font-bold">Collection Statistics</h2>
                     </div>
@@ -904,7 +824,7 @@
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Albums</h3><p className="text-5xl font-bold text-indigo-400">{stats.total}</p></div>
-                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Tracks</h3><p className="text-5xl font-bold text-indigo-400">{stats.totalTracks.toLocaleString()}</p></div>
+                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Albums Listened To</h3><p className="text-5xl font-bold text-indigo-400">{stats.listenedCount}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Avg. Tracks/Album</h3><p className="text-5xl font-bold text-indigo-400">{stats.averageTrackCount.toLocaleString()}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Unique Artists</h3><p className="text-5xl font-bold text-indigo-400">{stats.uniqueArtists}</p></div>
                             
@@ -923,7 +843,7 @@
                                 </ol>
                             </div>
 
-                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Albums by Country</h3><canvas id="country-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Listened vs. Unlistened</h3><canvas id="listened-chart"></canvas></div>
                             
                             <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="genre-chart"></canvas></div>
                             <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Albums by Decade</h3><canvas id="decade-chart"></canvas></div>
@@ -949,7 +869,7 @@
                                 <p><span className="font-bold text-gray-400">Genre:</span> {album.genre}</p>
                                 <p><span className="font-bold text-gray-400">Tracks:</span> {album.trackCount > 0 ? album.trackCount : 'N/A'}</p>
                                 <p><span className="font-bold text-gray-400">Released:</span> {album.releaseYear > 0 ? album.releaseYear : 'N/A'}</p>
-                                <p><span className="font-bold text-gray-400">Country:</span> {album.country || 'N/A'}</p>
+                                <p><span className="font-bold text-gray-400">Status:</span> {album.listened ? 'Listened' : 'Not Listened'}</p>
                             </div>
                             <button onClick={onClose} className="mt-4 md:mt-auto ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
                         </div>
@@ -959,7 +879,7 @@
         }
 
         // --- Albums Display (Gallery + List) Component ---
-        function AlbumDisplay({ albums, loading, onAlbumUpdated, setView }) {
+        function AlbumDisplay({ albums, setAlbums, loading, onAlbumUpdated, setView }) {
             const [viewMode, setViewMode] = useState('gallery');
             const [editingAlbumId, setEditingAlbumId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
@@ -968,6 +888,15 @@
             const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, albumId: null });
             
             const allGenres = useMemo(() => [...new Set(albums.map(b => b.genre))], [albums]);
+
+            const handleToggleListened = async (albumId, currentStatus) => {
+                const newStatus = !currentStatus;
+                // Optimistically update UI
+                setAlbums(albums.map(a => a.id === albumId ? { ...a, listened: newStatus } : a));
+                // Update Firestore
+                const albumRef = doc(db, "albums", albumId);
+                await updateDoc(albumRef, { listened: newStatus });
+            };
             
             const handleDeleteRequest = (albumId) => {
                 setConfirmDelete({ isOpen: true, albumId: albumId });
@@ -994,7 +923,6 @@
                     releaseYear: album.releaseYear || new Date().getFullYear(),
                     trackCount: album.trackCount || 0,
                     genre: album.genre,
-                    country: album.country || '',
                 });
             };
 
@@ -1066,13 +994,20 @@
                     ) : viewMode === 'gallery' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                             {albums.map(album => (
-                                <button key={album.id} onClick={() => setLightboxAlbum(album)} className="focus:outline-none">
+                                <button key={album.id} onClick={() => setLightboxAlbum(album)} className="focus:outline-none relative">
                                     <img 
                                         src={album.coverUrl} 
                                         alt={`Cover of ${album.title}`}
                                         className="w-full h-auto object-cover rounded-md shadow-lg transform hover:scale-105 transition-transform duration-300"
                                         onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/250x250/1f2937/ffffff?text=${album.title.split(' ').join('+')}`}}
                                     />
+                                    {album.listened && (
+                                        <div className="absolute top-2 right-2 bg-green-500 rounded-full h-6 w-6 flex items-center justify-center text-white shadow-lg">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -1080,11 +1015,12 @@
                         <div className="space-y-4 md:space-y-0 md:border-separate md:min-w-full" style={{ borderSpacing: '0 0.75rem' }}>
                             <div className="hidden md:table-header-group">
                                 <div className="md:table-row">
-                                    <div className="md:table-cell w-[35%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Album</div>
+                                    <div className="md:table-cell w-[30%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Album</div>
                                     <div className="md:table-cell w-[25%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Artist</div>
                                     <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Year</div>
                                     <div className="md:table-cell w-[15%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Genre</div>
-                                    <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Tracks</div>
+                                    <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Tracks</div>
+                                    <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Listened</div>
                                     <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-right">Actions</div>
                                 </div>
                             </div>
@@ -1093,7 +1029,7 @@
                             {albums.map((album) => {
                                 const isEditing = editingAlbumId === album.id;
                                 return isEditing ? (
-                                    <div key={album.id} className="md:table-row"><div className="md:table-cell md:p-0" colSpan="6"><div className="p-3 bg-indigo-900 bg-opacity-50 rounded-lg space-y-3">
+                                    <div key={album.id} className="md:table-row"><div className="md:table-cell md:p-0" colSpan="7"><div className="p-3 bg-indigo-900 bg-opacity-50 rounded-lg space-y-3">
                                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                                             <div className="md:col-span-2">
                                                 <label className="block text-xs font-medium text-gray-400">Title</label>
@@ -1161,7 +1097,10 @@
                                         <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.artist}</div>
                                         <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.releaseYear || 'N/A'}</div>
                                         <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.genre}</div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.trackCount > 0 ? album.trackCount : 'N/A'}</div>
+                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle text-center">{album.trackCount > 0 ? album.trackCount : 'N/A'}</div>
+                                        <div className="hidden md:table-cell p-3 text-center align-middle">
+                                            <input type="checkbox" checked={album.listened} onChange={() => handleToggleListened(album.id, album.listened)} className="h-5 w-5 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500 cursor-pointer"/>
+                                        </div>
                                         <div className="hidden md:table-cell p-3 text-right rounded-r-lg align-middle">
                                             <div className="flex justify-end gap-2">
                                                 <button onClick={() => handleEditClick(album)} className="p-2 rounded-md hover:bg-gray-700" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg></button>
