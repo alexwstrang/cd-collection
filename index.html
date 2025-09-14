@@ -346,7 +346,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.18</span>
+                            <span className="font-mono text-xs text-gray-500">v0.19</span>
                         </div>
 
                         <div className="md:hidden">
@@ -465,47 +465,60 @@
             });
 
             const handleBarcodeSearch = useCallback(async (searchBarcode) => {
-                setLoading(true);
-                setError('');
-                setAlbumData(null);
-                setIsManualAdd(false);
+            setLoading(true);
+            setError('');
+            setAlbumData(null);
+            setIsManualAdd(false);
 
-                if (!DISCOGS_TOKEN || DISCOGS_TOKEN === "PASTE_YOUR_TOKEN_HERE") {
-                    setError("Discogs API token is missing. Please add it to the script.");
-                    setLoading(false);
-                    return;
-                }
-
-                try {
-                    const sanitized = sanitizeBarcode(searchBarcode);
-                    const url = `https://api.discogs.com/database/search?barcode=${sanitized}`;
-                    const response = await fetch(url, {
-                        headers: {
-                            'Authorization': `Discogs token=${DISCOGS_TOKEN}`,
-                        },
-                    });
-                    const data = await response.json();
-
-                    if (data.results && data.results.length > 0) {
-                        const result = data.results[0];
-                        const [artist, title] = result.title.split(' - ');
-                        
-                        setAlbumData({
-                            title: title || result.title,
-                            artist: artist || 'N/A',
-                            releaseYear: result.year || 'N/A',
-                            coverUrl: result.cover_image,
-                            listened: false,
-                        });
-                    } else {
-                        setError('Album not found for this barcode.');
-                    }
-                } catch (err) {
-                    console.error("API Fetch Error:", err);
-                    setError('Failed to fetch album data. Please check the barcode and your connection.');
-                }
+            if (!DISCOGS_TOKEN || DISCOGS_TOKEN === "PASTE_YOUR_TOKEN_HERE") {
+                setError("Discogs API token is missing. Please add it to the script.");
                 setLoading(false);
-            }, []);
+                return;
+            }
+
+            try {
+                const sanitized = sanitizeBarcode(searchBarcode);
+                const url = `https://api.discogs.com/database/search?barcode=${sanitized}`;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Discogs token=${DISCOGS_TOKEN}` },
+                });
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    const result = data.results[0];
+                    
+                    // --- ROBUST PARSING LOGIC ---
+                    const resultTitle = result?.title ?? 'Untitled Album';
+                    const coverImage = result?.cover_image ?? ''; // Ensure it's a string
+                    const releaseYear = result?.year ?? 'N/A';
+
+                    let artist = 'N/A';
+                    let title = resultTitle;
+
+                    // Only split if the separator actually exists
+                    if (resultTitle.includes(' - ')) {
+                        const parts = resultTitle.split(' - ');
+                        artist = parts[0];
+                        // Handle cases where album title also has a hyphen
+                        title = parts.slice(1).join(' - '); 
+                    }
+
+                    setAlbumData({
+                        title: title,
+                        artist: artist,
+                        releaseYear: releaseYear,
+                        coverUrl: coverImage,
+                        listened: false,
+                    });
+                } else {
+                    setError('Album not found for this barcode.');
+                }
+            } catch (err) {
+                console.error("API Fetch Error:", err);
+                setError('Failed to fetch album data. Please check your connection.');
+            }
+            setLoading(false);
+        }, []);
 
             const handleScanSuccess = useCallback((decodedBarcode) => {
                 setIsScanning(false);
@@ -1245,7 +1258,7 @@
             const [alertMessage, setAlertMessage] = useState('');
             const [isScanning, setIsScanning] = useState(false);
 
-            const performSearch = (term, type) => {
+            const performSearch = useCallback((term, type) => {
                 if (!term.trim()) return;
 
                 setHasSearched(true);
@@ -1270,21 +1283,21 @@
                 } else {
                     const lowerCaseSearchTerm = term.toLowerCase();
                     const searchResults = albums.filter(album => {
-                        return album[type].toLowerCase().includes(lowerCaseSearchTerm);
+                        return album[type] && album[type].toLowerCase().includes(lowerCaseSearchTerm);
                     });
                     setResults(searchResults);
                 }
-            };
+            }, [albums]); // Dependency on `albums` is crucial here
 
             const handleManualSearch = (e) => {
                 e.preventDefault();
                 performSearch(searchTerm, searchType);
             };
 
-            const handleScanSuccess = (decodedBarcode) => {
+            const handleScanSuccess = useCallback((decodedBarcode) => {
                 setIsScanning(false);
                 performSearch(decodedBarcode, 'barcode');
-            };
+            }, [performSearch]); // Dependency on `performSearch`
 
             return (
                 <div className="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg">
