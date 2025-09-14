@@ -287,7 +287,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.23</span>
+                            <span className="font-mono text-xs text-gray-500">v0.24</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -330,63 +330,76 @@
         }
         
         // --- Barcode Scanner Component (using ZXing-js) ---
-        function BarcodeScanner({ onScanSuccess, onCancel }) {
-            const { useState, useEffect, useRef } = React;
-            const [error, setError] = useState(null);
-            const codeReaderRef = useRef(null); // To hold the library instance
-            const videoRef = useRef(null); // To reference the video element
+function BarcodeScanner({ onScanSuccess, onCancel }) {
+    // Hooks are defined at the top of the <script> block, so we don't need to redeclare them here.
+    const [error, setError] = useState(null);
+    const codeReaderRef = useRef(null);
+    const videoRef = useRef(null);
 
-            useEffect(() => {
-                // Initialize the library instance
-                codeReaderRef.current = new ZXingBrowser.BrowserMultiFormatReader();
-
-                // Start scanning
-                codeReaderRef.current.decodeFromInputVideoDevice(undefined, videoRef.current)
-                    .then(result => {
-                        onScanSuccess(result.getText());
-                    })
-                    .catch(err => {
-                        // ZXing throws a NotFoundException on every frame without a barcode.
-                        // We only want to log/display other, more serious errors.
-                        if (!(err instanceof ZXingBrowser.NotFoundException)) {
-                            console.error("ZXing Error:", err);
-                            setError(`Scanner failed to start. Please ensure camera permissions are allowed. Error: ${err.message}`);
-                        }
-                    });
-
-                // Cleanup function to stop the scanner when the component unmounts
-                return () => {
-                    if (codeReaderRef.current) {
-                        codeReaderRef.current.reset();
-                    }
-                };
-            }, [onScanSuccess]);
-
-            return (
-                <div className="flex flex-col items-center gap-4">
-                    {error && (
-                        <div className="p-3 mb-2 w-full bg-red-900 border border-red-700 text-red-200 text-sm rounded-md">
-                            <p className="font-bold">Scanner Error</p>
-                            <p>{error}</p>
-                        </div>
-                    )}
-                    <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
-
-                    {/* The same viewfinder styling, but now with a <video> element */}
-                    <div className="scanner-viewfinder">
-                        <video ref={videoRef} id="reader" className="w-full h-full object-cover"></video>
-                        <div className="scanner-scan-line"></div>
-                    </div>
-
-                    <button
-                        onClick={onCancel}
-                        className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
-                    >
-                        Cancel Scan
-                    </button>
-                </div>
-            );
+    useEffect(() => {
+        // --- Defensive Check ---
+        // First, check if the ZXing library loaded and is available on the window.
+        if (!window.ZXingBrowser) {
+            setError("Scanning library (ZXing) failed to load. Please check your internet connection or ad blocker and refresh the page.");
+            return;
         }
+
+        // Initialize the library instance
+        codeReaderRef.current = new ZXingBrowser.BrowserMultiFormatReader();
+
+        // Check if the video element is ready
+        if (!videoRef.current) {
+            setError("Video element is not yet available.");
+            return;
+        }
+        
+        // Start scanning
+        codeReaderRef.current.decodeFromInputVideoDevice(undefined, videoRef.current)
+            .then(result => {
+                // A barcode was successfully found
+                onScanSuccess(result.getText());
+            })
+            .catch(err => {
+                // ZXing throws a NotFoundException on every frame without a barcode. This is normal.
+                // We only want to display other, more critical errors.
+                if (!(err instanceof ZXingBrowser.NotFoundException)) {
+                    console.error("ZXing Error:", err);
+                    setError(`Scanner failed to start. Please ensure camera permissions are allowed. Error: ${err.message}`);
+                }
+            });
+
+        // Cleanup function to stop the scanner when the component unmounts
+        return () => {
+            if (codeReaderRef.current) {
+                codeReaderRef.current.reset();
+            }
+        };
+    }, [onScanSuccess]); // The dependency array is correct
+
+    return (
+        <div className="flex flex-col items-center gap-4">
+            {error && (
+                <div className="p-3 mb-2 w-full bg-red-900 border border-red-700 text-red-200 text-sm rounded-md">
+                    <p className="font-bold">Scanner Error</p>
+                    <p>{error}</p>
+                </div>
+            )}
+            <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
+
+            <div className="scanner-viewfinder">
+                <video ref={videoRef} id="reader" className="w-full h-full object-cover"></video>
+                <div className="scanner-scan-line"></div>
+            </div>
+
+            <button
+                onClick={onCancel}
+                className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+                Cancel Scan
+            </button>
+        </div>
+    );
+}
 
         // --- Add Single Album Component ---
         function AddAlbum({ onAlbumAdded, onCancel }) {
