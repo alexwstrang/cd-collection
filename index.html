@@ -287,7 +287,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.08</span>
+                            <span className="font-mono text-xs text-gray-500">v0.09</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -1024,12 +1024,12 @@
 
                     if (foundAlbum) {
                         if (foundAlbum.listened) {
-                            setAlertMessage(`Whoa there, eagle eye! You already own "${foundAlbum.title}," and you've even listened to it. Great taste, by the way! 😉`);
+                            setAlertMessage(`You already own a copy of "${foundAlbum.title}," and you've listened to it before!`);
                         } else {
-                            setAlertMessage(`Hey, good spot! You own "${foundAlbum.title}," but it looks like it's still waiting for its first spin. What are you waiting for?! 🎧`);
+                            setAlertMessage(`You already own a copy of "${foundAlbum.title}," but it looks like it's still waiting for its first spin.`);
                         }
                     } else {
-                        setAlertMessage("Nope, not in your collection! This one's a free agent. Feel free to add it. 👍");
+                        setAlertMessage("You dont own a copy of this yet!");
                     }
                 } else {
                     const lowerCaseSearchTerm = term.toLowerCase();
