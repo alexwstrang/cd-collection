@@ -16,6 +16,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+
     <style>
         body {
             background-color: #111827; /* bg-gray-900 */
@@ -25,6 +27,7 @@
         }
 
         /* --- Custom Styles for the Barcode Scanner --- */
+        /* Quagga creates its own video and canvas, so we style the container */
         .scanner-viewfinder {
             position: relative;
             width: 300px;
@@ -33,11 +36,19 @@
             border-radius: 0.5rem; /* rounded-lg */
             border: 2px dashed #4b5563; /* border-gray-600 */
         }
-
-        .scanner-viewfinder #reader {
+        
+        .scanner-viewfinder video, .scanner-viewfinder canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* This canvas shows the bounding box */
+        .scanner-viewfinder canvas.drawingBuffer {
+            z-index: 10;
         }
 
         .scanner-scan-line {
@@ -50,6 +61,7 @@
             box-shadow: 0 0 10px #818cf8;
             animation: scan 2.5s infinite ease-in-out;
             border-radius: 9999px;
+            z-index: 20; /* Make sure it's on top */
         }
 
         @keyframes scan {
@@ -97,7 +109,6 @@
         };
 
         // --- Discogs API Configuration ---
-        // IMPORTANT: PASTE YOUR DISCOGS PERSONAL ACCESS TOKEN HERE
         const DISCOGS_TOKEN = "wGihEmsgoVbrFZvpHBMIjcZUIoynMvcxeZpsXYNv";
 
         // Initialize Firebase
@@ -285,7 +296,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.26</span>
+                            <span className="font-mono text-xs text-gray-500">v0.27</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -327,62 +338,50 @@
             );
         }
         
-        // --- Barcode Scanner Component (using Native Browser API) ---
+        // --- Barcode Scanner Component (using Quagga2) ---
         function BarcodeScanner({ onScanSuccess, onCancel }) {
             const { useState, useEffect, useRef } = React;
             const [error, setError] = useState(null);
-            const videoRef = useRef(null);
-            const streamRef = useRef(null); // To hold the stream for cleanup
-            const intervalRef = useRef(null); // To hold the detection interval
 
             useEffect(() => {
-                // --- 1. Check if the API is supported in the browser ---
-                if (!('BarcodeDetector' in window)) {
-                    setError("This browser does not support the native Barcode Detection API. Please try Chrome on desktop/android or Safari on a modern iPhone.");
-                    return;
-                }
+                let isMounted = true; // Flag to prevent state updates on unmounted component
 
-                // --- 2. Create the detector ---
-                // We specify 'ean_13' as it's the standard for CD barcodes.
-                const barcodeDetector = new BarcodeDetector({
-                    formats: ['ean_13', 'upc_a', 'ean_8']
-                });
-
-                // --- 3. Start the video stream ---
-                navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                }).then(stream => {
-                    streamRef.current = stream; // Save stream for cleanup
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                        videoRef.current.play();
-
-                        // --- 4. Start detecting barcodes on a timer ---
-                        intervalRef.current = setInterval(async () => {
-                            try {
-                                const barcodes = await barcodeDetector.detect(videoRef.current);
-                                if (barcodes.length > 0) {
-                                    // --- Barcode Found! ---
-                                    clearInterval(intervalRef.current); // Stop detecting
-                                    onScanSuccess(barcodes[0].rawValue);
-                                }
-                            } catch (e) {
-                                console.error("Detection error:", e);
-                                // Don't set a user-facing error for detection frames
-                            }
-                        }, 200); // Check for a barcode 5 times per second
+                Quagga.init({
+                    inputStream: {
+                        name: "Live",
+                        type: "LiveStream",
+                        target: document.querySelector('#quagga-viewfinder'),
+                        constraints: {
+                            width: { min: 640 },
+                            height: { min: 480 },
+                            facingMode: "environment"
+                        },
+                    },
+                    decoder: {
+                        readers: ["ean_reader"] // Standard for CD barcodes
+                    },
+                    locate: true, // Show bounding box around detected code
+                }, function(err) {
+                    if (err) {
+                        console.error("Quagga initialization error:", err);
+                        if (isMounted) setError(`Could not initialize scanner. Please grant camera permission. Error: ${err.message}`);
+                        return;
                     }
-                }).catch(err => {
-                    console.error("getUserMedia error:", err);
-                    setError(`Could not access the camera. Please grant permission. Error: ${err.message}`);
+                    Quagga.start();
                 });
 
-                // --- 5. Cleanup function ---
+                const onDetected = (result) => {
+                    Quagga.stop();
+                    onScanSuccess(result.codeResult.code);
+                };
+
+                Quagga.onDetected(onDetected);
+
+                // Cleanup
                 return () => {
-                    clearInterval(intervalRef.current);
-                    if (streamRef.current) {
-                        streamRef.current.getTracks().forEach(track => track.stop());
-                    }
+                    isMounted = false;
+                    Quagga.offDetected(onDetected);
+                    Quagga.stop();
                 };
             }, [onScanSuccess]);
 
@@ -396,8 +395,9 @@
                     )}
                     <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
 
-                    <div className="scanner-viewfinder">
-                        <video ref={videoRef} id="reader" className="w-full h-full object-cover" muted playsInline></video>
+                    {/* Quagga attaches to a div and creates its own canvas and video elements inside it */}
+                    <div id="quagga-viewfinder" className="scanner-viewfinder">
+                        {/* The scan line is just a visual effect, it can stay */}
                         <div className="scanner-scan-line"></div>
                     </div>
 
@@ -437,7 +437,6 @@
 
                 try {
                     const sanitized = sanitizeBarcode(searchBarcode);
-                    // --- Discogs API Call ---
                     const url = `https://api.discogs.com/database/search?barcode=${sanitized}`;
                     const response = await fetch(url, {
                         headers: {
@@ -850,15 +849,12 @@
             
             const handleToggleListened = async (albumId, currentStatus) => {
                 const newStatus = !currentStatus;
-                // Optimistically update the UI for a snappy feel
                 setAlbums(albums.map(a => a.id === albumId ? { ...a, listened: newStatus } : a));
 
-                // If the lightbox is open for this album, update it too
                 if (lightboxAlbum && lightboxAlbum.id === albumId) {
                     setLightboxAlbum(prev => ({ ...prev, listened: newStatus }));
                 }
 
-                // Update the database in the background
                 const albumRef = doc(db, "albums", albumId);
                 await updateDoc(albumRef, { listened: newStatus });
             };
