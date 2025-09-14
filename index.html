@@ -352,7 +352,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.13</span>
+                            <span className="font-mono text-xs text-gray-500">v0.15</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -408,11 +408,14 @@
                         });
                 };
         
+                // This config tells the scanner what to look for and how often.
                 const scannerConfig = { 
                     fps: 10, 
                     qrbox: { width: 250, height: 150 } 
                 };
 
+                // This config tells the browser what kind of camera and video stream to request.
+                // Requesting a standard HD resolution helps stabilize autofocus on iPhones.
                 const cameraConfig = { 
                     facingMode: "environment",
                     width: { ideal: 1280 },
@@ -425,16 +428,15 @@
                         onCancel(); 
                     });
         
-                // This cleanup function is crucial for stopping the camera
                 return () => {
-                    // Using .getState() is a safer way to check before stopping
-                    if (html5QrCode && html5QrCode.getState() === 2) { // 2 means SCANNING
-                        html5QrCode.stop().catch(err => {
-                            console.error("Failed to stop scanner during cleanup.", err);
-                        });
+                    try {
+                        if (html5QrCode && html5QrCode.isScanning) {
+                            html5QrCode.stop();
+                        }
+                    } catch (err) {
+                        console.error("Failed to stop scanner during cleanup.", err);
                     }
                 };
-            // VITAL FIX: Add dependencies here to ensure the effect re-runs
             }, [onScanSuccess, onCancel]);
         
             return (
