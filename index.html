@@ -1000,27 +1000,42 @@
             );
         }
 
-        // --- Search Component ---
+       // --- Search Component ---
         function Search({ albums, onCancel }) {
             const [searchTerm, setSearchTerm] = useState('');
-            const [searchType, setSearchType] = useState('title'); // 'title' or 'artist'
+            const [searchType, setSearchType] = useState('title'); // 'title', 'artist', or 'barcode'
             const [results, setResults] = useState([]);
             const [hasSearched, setHasSearched] = useState(false);
+            const [alertMessage, setAlertMessage] = useState('');
 
             const handleSearch = (e) => {
                 e.preventDefault();
                 if (!searchTerm.trim()) return;
 
-                const lowerCaseSearchTerm = searchTerm.toLowerCase();
-                const searchResults = albums.filter(album => {
-                    if (searchType === 'title') {
-                        return album.title.toLowerCase().includes(lowerCaseSearchTerm);
-                    } else { // artist
-                        return album.artist.toLowerCase().includes(lowerCaseSearchTerm);
-                    }
-                });
-                setResults(searchResults);
                 setHasSearched(true);
+                setResults([]);
+                setAlertMessage('');
+
+                if (searchType === 'barcode') {
+                    const sanitized = sanitizeBarcode(searchTerm);
+                    const foundAlbum = albums.find(album => album.barcode === sanitized);
+
+                    if (foundAlbum) {
+                        if (foundAlbum.listened) {
+                            setAlertMessage(`Whoa there, eagle eye! You already own "${foundAlbum.title}," and you've even listened to it. Great taste, by the way! 😉`);
+                        } else {
+                            setAlertMessage(`Hey, good spot! You own "${foundAlbum.title}," but it looks like it's still waiting for its first spin. What are you waiting for?! 🎧`);
+                        }
+                    } else {
+                        setAlertMessage("Nope, not in your collection! This one's a free agent. Feel free to add it. 👍");
+                    }
+                } else {
+                    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+                    const searchResults = albums.filter(album => {
+                        return album[searchType].toLowerCase().includes(lowerCaseSearchTerm);
+                    });
+                    setResults(searchResults);
+                }
             };
 
             return (
@@ -1040,6 +1055,7 @@
                         <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="p-2 bg-gray-700 rounded-md text-white">
                             <option value="title">Title</option>
                             <option value="artist">Artist</option>
+                            <option value="barcode">Barcode</option>
                         </select>
                         <button type="submit" className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
                             Search
@@ -1047,7 +1063,13 @@
                     </form>
 
                     <div>
-                        {hasSearched && results.length > 0 && (
+                        {alertMessage && (
+                             <div className="text-center p-4 mt-4 bg-gray-700 rounded-lg shadow-inner">
+                                <p className="text-lg text-indigo-300">{alertMessage}</p>
+                             </div>
+                        )}
+
+                        {!alertMessage && hasSearched && results.length > 0 && (
                             <div className="space-y-3">
                                 {results.map(album => (
                                     <div key={album.id} className="flex items-start gap-4 p-3 bg-gray-700 rounded-lg">
@@ -1061,7 +1083,7 @@
                                 ))}
                             </div>
                         )}
-                        {hasSearched && results.length === 0 && (
+                        {!alertMessage && hasSearched && results.length === 0 && (
                             <p className="text-center text-gray-400">No albums found matching your search.</p>
                         )}
                     </div>
