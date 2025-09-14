@@ -98,18 +98,16 @@
             appId: "1:148759504044:web:5332ca5553a0cd2a92ab09"
         };
 
+        // --- Discogs API Configuration ---
+        // IMPORTANT: PASTE YOUR DISCOGS PERSONAL ACCESS TOKEN HERE
+        const DISCOGS_TOKEN = "wGihEmsgoVbrFZvpHBMIjcZUIoynMvcxeZpsXYNv";
+
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
         // --- Helper Functions ---
-        const parseMusicGenre = (tags) => {
-            if (!tags || tags.length === 0) return 'General';
-            // Return the first tag as the primary genre
-            return tags[0].name.charAt(0).toUpperCase() + tags[0].name.slice(1);
-        };
-        
         const sanitizeBarcode = (barcode) => {
             return barcode.replace(/[-\s]/g, '');
         };
@@ -289,7 +287,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v1.1</span>
+                            <span className="font-mono text-xs text-gray-500">v1.2</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -401,24 +399,35 @@
                 setError('');
                 setAlbumData(null);
                 setIsManualAdd(false);
+
+                if (!DISCOGS_TOKEN || DISCOGS_TOKEN === "PASTE_YOUR_TOKEN_HERE") {
+                    setError("Discogs API token is missing. Please add it to the script.");
+                    setLoading(false);
+                    return;
+                }
+
                 try {
                     const sanitized = sanitizeBarcode(searchBarcode);
-                    const url = `https://musicbrainz.org/ws/2/release/?query=barcode:${sanitized}&fmt=json`;
-                    const response = await fetch(url);
+                    // --- Discogs API Call ---
+                    const url = `https://api.discogs.com/database/search?barcode=${sanitized}`;
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Discogs token=${DISCOGS_TOKEN}`,
+                        },
+                    });
                     const data = await response.json();
 
-                    if (data.releases && data.releases.length > 0) {
-                        const release = data.releases[0];
-                        const releaseId = release.id;
-                        const title = release.title || 'No Title Provided';
+                    if (data.results && data.results.length > 0) {
+                        const result = data.results[0];
+                        const [artist, title] = result.title.split(' - ');
                         
                         setAlbumData({
-                            title: title,
-                            artist: release['artist-credit'] ? release['artist-credit'][0].name : 'N/A',
-                            genre: release.tags && release.tags.length > 0 ? parseMusicGenre(release.tags) : 'General',
-                            trackCount: release.media && release.media.length > 0 ? release.media[0]['track-count'] : 0,
-                            releaseYear: release.date ? new Date(release.date).getFullYear() : 'N/A',
-                            coverUrl: `https://coverartarchive.org/release/${releaseId}/front-250`,
+                            title: title || result.title,
+                            artist: artist || 'N/A',
+                            genre: result.genre ? result.genre[0] : 'General',
+                            trackCount: 0, // Discogs search API doesn't provide track count
+                            releaseYear: result.year || 'N/A',
+                            coverUrl: result.cover_image,
                             listened: false,
                         });
                     } else {
@@ -891,9 +900,7 @@
 
             const handleToggleListened = async (albumId, currentStatus) => {
                 const newStatus = !currentStatus;
-                // Optimistically update UI
                 setAlbums(albums.map(a => a.id === albumId ? { ...a, listened: newStatus } : a));
-                // Update Firestore
                 const albumRef = doc(db, "albums", albumId);
                 await updateDoc(albumRef, { listened: newStatus });
             };
@@ -1040,157 +1047,4 @@
                                                 <input type="text" name="artist" value={editFormData.artist} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400">Genre</label>
-                                                <select name="genreSelect" value={isEditingNewGenre ? 'add-new' : editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white">
-                                                    <option value={editFormData.genre}>{editFormData.genre}</option>
-                                                    {allGenres.filter(g => g !== editFormData.genre).map(g => <option key={g} value={g}>{g}</option>)}
-                                                    <option value="add-new">--- Add New ---</option>
-                                                </select>
-                                                {isEditingNewGenre && (
-                                                    <input type="text" name="genre" placeholder="New Genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"/>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-400">Year</label>
-                                                    <input type="number" name="releaseYear" value={editFormData.releaseYear} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-400">Tracks</label>
-                                                    <input type="number" name="trackCount" value={editFormData.trackCount} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-end gap-2">
-                                            <button onClick={() => handleSaveEdit(album.id)} className="px-3 py-1 text-xs rounded bg-green-600 text-white">Save</button>
-                                            <button onClick={handleCancelEdit} className="px-3 py-1 text-xs rounded bg-gray-600 text-white">Cancel</button>
-                                        </div>
-                                    </div></div></div>
-                                ) : (
-                                    <div
-                                        key={album.id}
-                                        className="bg-gray-800 rounded-lg p-4 flex flex-col gap-3 md:table-row md:p-0 md:bg-transparent hover:bg-gray-700 transition-colors duration-200"
-                                    >
-                                        {/* Mobile Card Layout */}
-                                        <div className="flex gap-4 md:hidden">
-                                            <img src={album.coverUrl} alt={album.title} className="w-20 h-20 object-cover rounded-md flex-shrink-0"/>
-                                            <div className="flex flex-col justify-between w-full">
-                                                <div>
-                                                    <h3 className="font-bold text-white text-lg">{album.title}</h3>
-                                                    <p className="text-sm text-gray-400">{album.artist}</p>
-                                                    <p className="text-xs text-gray-500">{album.genre} &bull; {album.trackCount} tracks</p>
-                                                </div>
-                                                <div className="flex gap-2 mt-2 self-end">
-                                                    <button onClick={() => handleEditClick(album)} className="p-2 rounded-md hover:bg-gray-600" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg></button>
-                                                    <button onClick={() => handleDeleteRequest(album.id)} className="p-2 rounded-md hover:bg-gray-600" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Desktop Table Cells */}
-                                        <div className="hidden md:table-cell p-3 align-middle rounded-l-lg">
-                                            <div className="flex items-center gap-4">
-                                                <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
-                                                <span className="font-bold text-white">{album.title}</span>
-                                            </div>
-                                        </div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.artist}</div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.releaseYear || 'N/A'}</div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle">{album.genre}</div>
-                                        <div className="hidden md:table-cell p-3 text-sm text-gray-400 align-middle text-center">{album.trackCount > 0 ? album.trackCount : 'N/A'}</div>
-                                        <div className="hidden md:table-cell p-3 text-center align-middle">
-                                            <input type="checkbox" checked={album.listened} onChange={() => handleToggleListened(album.id, album.listened)} className="h-5 w-5 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500 cursor-pointer"/>
-                                        </div>
-                                        <div className="hidden md:table-cell p-3 text-right rounded-r-lg align-middle">
-                                            <div className="flex justify-end gap-2">
-                                                <button onClick={() => handleEditClick(album)} className="p-2 rounded-md hover:bg-gray-700" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg></button>
-                                                <button onClick={() => handleDeleteRequest(album.id)} className="p-2 rounded-md hover:bg-gray-700" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // --- Search Component ---
-        function Search({ albums, onCancel }) {
-            const [searchTerm, setSearchTerm] = useState('');
-            const [searchType, setSearchType] = useState('title'); // 'title' or 'artist'
-            const [results, setResults] = useState([]);
-            const [hasSearched, setHasSearched] = useState(false);
-
-            const handleSearch = (e) => {
-                e.preventDefault();
-                if (!searchTerm.trim()) return;
-
-                const lowerCaseSearchTerm = searchTerm.toLowerCase();
-                const searchResults = albums.filter(album => {
-                    if (searchType === 'title') {
-                        return album.title.toLowerCase().includes(lowerCaseSearchTerm);
-                    } else { // artist
-                        return album.artist.toLowerCase().includes(lowerCaseSearchTerm);
-                    }
-                });
-                setResults(searchResults);
-                setHasSearched(true);
-            };
-
-            return (
-                <div className="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold">Search Your Collection</h2>
-                        <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
-                    </div>
-                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 mb-6">
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder={`Search by ${searchType}...`}
-                            className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="p-2 bg-gray-700 rounded-md text-white">
-                            <option value="title">Title</option>
-                            <option value="artist">Artist</option>
-                        </select>
-                        <button type="submit" className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
-                            Search
-                        </button>
-                    </form>
-
-                    <div>
-                        {hasSearched && results.length > 0 && (
-                            <div className="space-y-3">
-                                {results.map(album => (
-                                    <div key={album.id} className="flex items-start gap-4 p-3 bg-gray-700 rounded-lg">
-                                        <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
-                                        <div>
-                                            <p className="font-bold text-white">{album.title}</p>
-                                            <p className="text-sm text-gray-400">{album.artist}</p>
-                                            <p className="text-xs text-gray-500">Released: {album.releaseYear}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        {hasSearched && results.length === 0 && (
-                            <p className="text-center text-gray-400">No albums found matching your search.</p>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        // Render the app
-        const container = document.getElementById('root');
-        const root = ReactDOM.createRoot(container);
-        root.render(<App />);
-
-    </script>
-</body>
-</html>
+                                                <label className="block text-xs font-medium text-gray-
