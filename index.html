@@ -16,7 +16,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
 
     <style>
         body {
@@ -287,7 +287,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.22</span>
+                            <span className="font-mono text-xs text-gray-500">v0.23</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -329,110 +329,64 @@
             );
         }
         
-        // --- Barcode Scanner Component ---
-        function BarcodeScanner({ onScanSuccess, onCancel }) {
-            const [error, setError] = useState(null);
-            const [cameras, setCameras] = useState([]);
-            const [selectedCameraId, setSelectedCameraId] = useState(null);
-            const html5QrCodeRef = useRef(null);
+        // --- Barcode Scanner Component (using ZXing-js) ---
+        function BarcodeScanner({ onScanSuccess, onCancel }) {
+            const { useState, useEffect, useRef } = React;
+            const [error, setError] = useState(null);
+            const codeReaderRef = useRef(null); // To hold the library instance
+            const videoRef = useRef(null); // To reference the video element
 
-            const cleanupScanner = useCallback(() => {
-                if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-                    html5QrCodeRef.current.stop().catch(err => {
-                        console.error("Failed to stop scanner cleanly.", err);
-                    });
-                }
-            }, []);
+            useEffect(() => {
+                // Initialize the library instance
+                codeReaderRef.current = new ZXingBrowser.BrowserMultiFormatReader();
 
-            const startScanner = useCallback((deviceId) => {
-                cleanupScanner(); 
-                html5QrCodeRef.current = new Html5Qrcode("reader");
+                // Start scanning
+                codeReaderRef.current.decodeFromInputVideoDevice(undefined, videoRef.current)
+                    .then(result => {
+                        onScanSuccess(result.getText());
+                    })
+                    .catch(err => {
+                        // ZXing throws a NotFoundException on every frame without a barcode.
+                        // We only want to log/display other, more serious errors.
+                        if (!(err instanceof ZXingBrowser.NotFoundException)) {
+                            console.error("ZXing Error:", err);
+                            setError(`Scanner failed to start. Please ensure camera permissions are allowed. Error: ${err.message}`);
+                        }
+                    });
 
-                // --- MODIFICATION: Updated config ---
-                const config = {
-                    fps: 10,
-                    // Make the scanning box larger and responsive to the viewfinder size.
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                        return {
-                            width: Math.floor(minEdge * 0.8),
-                            height: Math.floor(minEdge * 0.5) // A wider box is better for barcodes
-                        };
-                    },
-                    aspectRatio: 1.7777778, // Try to force a 16:9 aspect ratio
-                };
+                // Cleanup function to stop the scanner when the component unmounts
+                return () => {
+                    if (codeReaderRef.current) {
+                        codeReaderRef.current.reset();
+                    }
+                };
+            }, [onScanSuccess]);
 
-                const successCallback = (decodedText, decodedResult) => {
-                    onScanSuccess(decodedText);
-                };
+            return (
+                <div className="flex flex-col items-center gap-4">
+                    {error && (
+                        <div className="p-3 mb-2 w-full bg-red-900 border border-red-700 text-red-200 text-sm rounded-md">
+                            <p className="font-bold">Scanner Error</p>
+                            <p>{error}</p>
+                        </div>
+                    )}
+                    <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
 
-                html5QrCodeRef.current.start(deviceId, config, successCallback)
-                    .catch(err => {
-                        console.error("Scanner start failed for device " + deviceId, err);
-                        setError(`Failed to start camera. Please ensure permissions are granted. Error: ${err.message}`);
-                    });
-            }, [onScanSuccess, cleanupScanner]);
+                    {/* The same viewfinder styling, but now with a <video> element */}
+                    <div className="scanner-viewfinder">
+                        <video ref={videoRef} id="reader" className="w-full h-full object-cover"></video>
+                        <div className="scanner-scan-line"></div>
+                    </div>
 
-            useEffect(() => {
-                Html5Qrcode.getCameras().then(devices => {
-                    if (devices && devices.length) {
-                        setCameras(devices);
-                        const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
-                        const initialCameraId = backCamera ? backCamera.id : devices[0].id;
-                        setSelectedCameraId(initialCameraId);
-                        startScanner(initialCameraId);
-                    } else {
-                        setError("No cameras found. Please ensure you have a camera and have granted access.");
-                    }
-                }).catch(err => {
-                    setError(`Error getting cameras: ${err.message}`);
-                });
-
-                return () => cleanupScanner();
-            }, [startScanner, cleanupScanner]);
-            
-            const handleSwitchCamera = () => {
-                if (cameras.length > 1) {
-                    const currentIndex = cameras.findIndex(c => c.id === selectedCameraId);
-                    const nextIndex = (currentIndex + 1) % cameras.length;
-                    const nextCameraId = cameras[nextIndex].id;
-                    setSelectedCameraId(nextCameraId);
-                    startScanner(nextCameraId);
-                }
-            };
-            
-            return (
-                <div className="flex flex-col items-center gap-4">
-                    {error && (
-                        <div className="p-3 mb-2 w-full bg-red-900 border border-red-700 text-red-200 text-sm rounded-md">
-                            <p className="font-bold">Scanner Error</p>
-                            <p>{error}</p>
-                        </div>
-                    )}
-                    <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
-                    <div className="scanner-viewfinder">
-                        <div id="reader"></div>
-                        <div className="scanner-scan-line"></div>
-                    </div>
-
-                    {cameras.length > 1 && (
-                        <button
-                            onClick={handleSwitchCamera}
-                            className="w-full max-w-xs px-4 py-2 font-bold bg-gray-600 text-white rounded-md hover:bg-gray-500"
-                        >
-                            Switch Camera
-                        </button>
-                    )}
-                    
-                    <button
-                        onClick={onCancel}
-                        className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
-                    >
-                        Cancel Scan
-                    </button>
-                </div>
-            );
-        }
+                    <button
+                        onClick={onCancel}
+                        className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
+                    >
+                        Cancel Scan
+                    </button>
+                </div>
+            );
+        }
 
         // --- Add Single Album Component ---
         function AddAlbum({ onAlbumAdded, onCancel }) {
@@ -617,31 +571,31 @@
                             )}
 
                             {isManualAdd && (
-                                 <form onSubmit={handleSaveManualAlbum} className="space-y-4">
-                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Title*</label>
-                                             <input type="text" name="title" value={manualFormData.title} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
-                                         </div>
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Artist*</label>
-                                             <input type="text" name="artist" value={manualFormData.artist} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
-                                         </div>
-                                     </div>
-                                     <div>
-                                         <label className="block text-sm font-medium text-gray-400">Cover Art URL</label>
-                                         <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                     </div>
-                                     <div>
-                                         <label className="block text-sm font-medium text-gray-400">Release Year</label>
-                                         <input type="number" name="releaseYear" value={manualFormData.releaseYear} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" />
-                                     </div>
-                                     <div className="flex items-center">
-                                         <input type="checkbox" id="listenedManual" name="listened" checked={manualFormData.listened} onChange={handleManualFormChange} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500"/>
-                                         <label htmlFor="listenedManual" className="ml-2 block text-sm text-gray-300">I have listened to this album</label>
-                                     </div>
-                                     <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Album</button>
-                                  </form>
+                                <form onSubmit={handleSaveManualAlbum} className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-400">Title*</label>
+                                            <input type="text" name="title" value={manualFormData.title} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-400">Artist*</label>
+                                            <input type="text" name="artist" value={manualFormData.artist} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-400">Cover Art URL</label>
+                                        <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-400">Release Year</label>
+                                        <input type="number" name="releaseYear" value={manualFormData.releaseYear} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" />
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input type="checkbox" id="listenedManual" name="listened" checked={manualFormData.listened} onChange={handleManualFormChange} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-indigo-600 focus:ring-indigo-500"/>
+                                        <label htmlFor="listenedManual" className="ml-2 block text-sm text-gray-300">I have listened to this album</label>
+                                    </div>
+                                    <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Album</button>
+                                </form>
                             )}
 
                             {albumData && !isManualAdd && (
@@ -842,10 +796,10 @@
                             <div className="space-y-2 text-sm mb-4">
                                 <p><span className="font-bold text-gray-400">Released:</span> {album.releaseYear > 0 ? album.releaseYear : 'N/A'}</p>
                                 <div className="flex items-center gap-2">
-                                     <span className="font-bold text-gray-400">Status:</span>
-                                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${album.listened ? 'bg-green-200 text-green-800' : 'bg-gray-600 text-gray-200'}`}>
-                                        {album.listened ? 'Listened' : 'Not Listened'}
-                                     </span>
+                                        <span className="font-bold text-gray-400">Status:</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${album.listened ? 'bg-green-200 text-green-800' : 'bg-gray-600 text-gray-200'}`}>
+                                            {album.listened ? 'Listened' : 'Not Listened'}
+                                        </span>
                                 </div>
                             </div>
                             
@@ -961,18 +915,18 @@
                     <Lightbox album={lightboxAlbum} onClose={() => setLightboxAlbum(null)} onToggleListened={handleToggleListened} />
                     <ConfirmationModal isOpen={confirmDelete.isOpen} message="Are you sure you want to delete this album?" onConfirm={confirmDeletion} onCancel={cancelDeletion} />
                     
-                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-                         <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Collection ({albums.length})</h2>
-                         <div className="flex items-center gap-2">
-                             <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                                 <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
-                                 <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
-                             </div>
-                         </div>
-                     </div>
+                        <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Collection ({albums.length})</h2>
+                            <div className="flex items-center gap-2">
+                                <div className="flex items-center bg-gray-800 p-1 rounded-lg">
+                                    <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                                    <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                                </div>
+                            </div>
+                        </div>
                     
                     {albums.length === 0 ? (
-                         <p className="text-gray-400">No albums in your collection yet.</p>
+                        <p className="text-gray-400">No albums in your collection yet.</p>
                     ) : viewMode === 'gallery' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                             {albums.map(album => (
