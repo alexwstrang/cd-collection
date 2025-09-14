@@ -287,7 +287,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.24</span>
+                            <span className="font-mono text-xs text-gray-500">v0.25</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -331,13 +331,15 @@
         
         // --- Barcode Scanner Component (using ZXing-js) ---
 function BarcodeScanner({ onScanSuccess, onCancel }) {
-    // Hooks are defined at the top of the <script> block, so we don't need to redeclare them here.
+    // --- THIS IS THE FIX ---
+    // This line makes the component self-contained by defining the React hooks it needs.
+    const { useState, useEffect, useRef } = React;
+
     const [error, setError] = useState(null);
-    const codeReaderRef = useRef(null);
-    const videoRef = useRef(null);
+    const codeReaderRef = useRef(null); // To hold the library instance
+    const videoRef = useRef(null); // To reference the video element
 
     useEffect(() => {
-        // --- Defensive Check ---
         // First, check if the ZXing library loaded and is available on the window.
         if (!window.ZXingBrowser) {
             setError("Scanning library (ZXing) failed to load. Please check your internet connection or ad blocker and refresh the page.");
@@ -374,7 +376,7 @@ function BarcodeScanner({ onScanSuccess, onCancel }) {
                 codeReaderRef.current.reset();
             }
         };
-    }, [onScanSuccess]); // The dependency array is correct
+    }, [onScanSuccess]);
 
     return (
         <div className="flex flex-col items-center gap-4">
