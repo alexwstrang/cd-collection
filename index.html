@@ -352,7 +352,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.15</span>
+                            <span className="font-mono text-xs text-gray-500">v0.16</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -396,7 +396,7 @@
             );
         }
         
-      // --- Barcode Scanner Component ---
+        // --- Barcode Scanner Component ---
         function BarcodeScanner({ onScanSuccess, onCancel }) {
             useEffect(() => {
                 const html5QrCode = new Html5Qrcode("reader");
@@ -408,14 +408,11 @@
                         });
                 };
         
-                // This config tells the scanner what to look for and how often.
                 const scannerConfig = { 
                     fps: 10, 
                     qrbox: { width: 250, height: 150 } 
                 };
 
-                // This config tells the browser what kind of camera and video stream to request.
-                // Requesting a standard HD resolution helps stabilize autofocus on iPhones.
                 const cameraConfig = { 
                     facingMode: "environment",
                     width: { ideal: 1280 },
@@ -429,12 +426,10 @@
                     });
         
                 return () => {
-                    try {
-                        if (html5QrCode && html5QrCode.isScanning) {
-                            html5QrCode.stop();
-                        }
-                    } catch (err) {
-                        console.error("Failed to stop scanner during cleanup.", err);
+                    if (html5QrCode && html5QrCode.getState() === 2) { // 2 means SCANNING
+                        html5QrCode.stop().catch(err => {
+                            console.error("Failed to stop scanner during cleanup.", err);
+                        });
                     }
                 };
             }, [onScanSuccess, onCancel]);
@@ -482,7 +477,6 @@
 
                 try {
                     const sanitized = sanitizeBarcode(searchBarcode);
-                    // --- Discogs API Call ---
                     const url = `https://api.discogs.com/database/search?barcode=${sanitized}`;
                     const response = await fetch(url, {
                         headers: {
@@ -895,15 +889,12 @@
             
             const handleToggleListened = async (albumId, currentStatus) => {
                 const newStatus = !currentStatus;
-                // Optimistically update the UI for a snappy feel
                 setAlbums(albums.map(a => a.id === albumId ? { ...a, listened: newStatus } : a));
 
-                // If the lightbox is open for this album, update it too
                 if (lightboxAlbum && lightboxAlbum.id === albumId) {
                     setLightboxAlbum(prev => ({ ...prev, listened: newStatus }));
                 }
 
-                // Update the database in the background
                 const albumRef = doc(db, "albums", albumId);
                 await updateDoc(albumRef, { listened: newStatus });
             };
@@ -1242,7 +1233,7 @@
                                     <div className="md:table-cell w-[40%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Album</div>
                                     <div className="md:table-cell w-[35%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Artist</div>
                                     <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-left">Year</div>
-                                    <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Listened</div>
+                                    <div className="md:table-cell w-[5%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">Mark Listened</div>
                                     <div className="md:table-cell w-[10%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-right">Actions</div>
                                 </div>
                             </div>
@@ -1254,7 +1245,6 @@
                                     <div key={album.id} className="md:table-row"><div className="md:table-cell md:p-0" colSpan="5"><div className="p-3 bg-indigo-900 bg-opacity-50 rounded-lg space-y-3">{/* Edit form can be copied from AlbumDisplay */}</div></div></div>
                                 ) : (
                                     <div key={album.id} className="bg-gray-800 rounded-lg p-4 flex flex-col gap-3 md:table-row md:p-0 md:bg-transparent hover:bg-gray-700 transition-colors duration-200">
-                                        {/* Mobile Card Layout - Can be copied from AlbumDisplay */}
                                         <div className="flex gap-4 md:hidden">
                                             <img src={album.coverUrl} alt={album.title} className="w-20 h-20 object-cover rounded-md flex-shrink-0"/>
                                             <div className="flex flex-col justify-between w-full">
@@ -1272,7 +1262,6 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        {/* Desktop Table Cells */}
                                         <div className="hidden md:table-cell p-3 align-middle rounded-l-lg">
                                             <div className="flex items-center gap-4">
                                                 <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
