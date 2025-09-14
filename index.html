@@ -1007,17 +1007,19 @@
             const [results, setResults] = useState([]);
             const [hasSearched, setHasSearched] = useState(false);
             const [alertMessage, setAlertMessage] = useState('');
+            const [isScanning, setIsScanning] = useState(false);
 
-            const handleSearch = (e) => {
-                e.preventDefault();
-                if (!searchTerm.trim()) return;
+            const performSearch = (term, type) => {
+                if (!term.trim()) return;
 
                 setHasSearched(true);
                 setResults([]);
                 setAlertMessage('');
+                setSearchTerm(term);
+                setSearchType(type);
 
-                if (searchType === 'barcode') {
-                    const sanitized = sanitizeBarcode(searchTerm);
+                if (type === 'barcode') {
+                    const sanitized = sanitizeBarcode(term);
                     const foundAlbum = albums.find(album => album.barcode === sanitized);
 
                     if (foundAlbum) {
@@ -1030,63 +1032,96 @@
                         setAlertMessage("Nope, not in your collection! This one's a free agent. Feel free to add it. 👍");
                     }
                 } else {
-                    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+                    const lowerCaseSearchTerm = term.toLowerCase();
                     const searchResults = albums.filter(album => {
-                        return album[searchType].toLowerCase().includes(lowerCaseSearchTerm);
+                        return album[type].toLowerCase().includes(lowerCaseSearchTerm);
                     });
                     setResults(searchResults);
                 }
             };
 
+            const handleManualSearch = (e) => {
+                e.preventDefault();
+                performSearch(searchTerm, searchType);
+            };
+
+            const handleScanSuccess = (decodedBarcode) => {
+                setIsScanning(false);
+                performSearch(decodedBarcode, 'barcode');
+            };
+
             return (
                 <div className="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold">Search Your Collection</h2>
-                        <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
+                        <h2 className="text-xl font-bold">{isScanning ? 'Scan Barcode' : 'Search Your Collection'}</h2>
+                        {!isScanning && <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>}
                     </div>
-                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 mb-6">
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder={`Search by ${searchType}...`}
-                            className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="p-2 bg-gray-700 rounded-md text-white">
-                            <option value="title">Title</option>
-                            <option value="artist">Artist</option>
-                            <option value="barcode">Barcode</option>
-                        </select>
-                        <button type="submit" className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
-                            Search
-                        </button>
-                    </form>
 
-                    <div>
-                        {alertMessage && (
-                             <div className="text-center p-4 mt-4 bg-gray-700 rounded-lg shadow-inner">
-                                <p className="text-lg text-indigo-300">{alertMessage}</p>
-                             </div>
-                        )}
-
-                        {!alertMessage && hasSearched && results.length > 0 && (
-                            <div className="space-y-3">
-                                {results.map(album => (
-                                    <div key={album.id} className="flex items-start gap-4 p-3 bg-gray-700 rounded-lg">
-                                        <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
-                                        <div>
-                                            <p className="font-bold text-white">{album.title}</p>
-                                            <p className="text-sm text-gray-400">{album.artist}</p>
-                                            <p className="text-xs text-gray-500">Released: {album.releaseYear}</p>
-                                        </div>
-                                    </div>
-                                ))}
+                    {isScanning ? (
+                        <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />
+                    ) : (
+                        <>
+                            <div className="mb-6">
+                                <button
+                                    onClick={() => setIsScanning(true)}
+                                    className="w-full max-w-sm mx-auto px-4 py-3 font-bold bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center justify-center gap-3 transition-transform transform hover:scale-105"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /><path d="M3 8V4m0 12v4m18-4v4m0-12V4" /></svg>
+                                    Scan Barcode to Search
+                                </button>
                             </div>
-                        )}
-                        {!alertMessage && hasSearched && results.length === 0 && (
-                            <p className="text-center text-gray-400">No albums found matching your search.</p>
-                        )}
-                    </div>
+
+                            <div className="flex items-center my-6">
+                                <hr className="flex-grow border-t border-gray-600" />
+                                <span className="px-4 text-sm text-gray-400">Or search manually</span>
+                                <hr className="flex-grow border-t border-gray-600" />
+                            </div>
+
+                            <form onSubmit={handleManualSearch} className="flex flex-col sm:flex-row gap-2 mb-6">
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder={`Search by ${searchType}...`}
+                                    className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                                <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="p-2 bg-gray-700 rounded-md text-white">
+                                    <option value="title">Title</option>
+                                    <option value="artist">Artist</option>
+                                    <option value="barcode">Barcode</option>
+                                </select>
+                                <button type="submit" className="px-4 py-2 font-bold text-white bg-gray-600 rounded-md hover:bg-gray-500">
+                                    Search
+                                </button>
+                            </form>
+
+                            <div className="mt-4">
+                                {alertMessage && (
+                                    <div className="text-center p-4 bg-gray-700 rounded-lg shadow-inner">
+                                        <p className="text-lg text-indigo-300">{alertMessage}</p>
+                                    </div>
+                                )}
+
+                                {!alertMessage && hasSearched && results.length > 0 && (
+                                    <div className="space-y-3">
+                                        {results.map(album => (
+                                            <div key={album.id} className="flex items-start gap-4 p-3 bg-gray-700 rounded-lg">
+                                                <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
+                                                <div>
+                                                    <p className="font-bold text-white">{album.title}</p>
+                                                    <p className="text-sm text-gray-400">{album.artist}</p>
+                                                    <p className="text-xs text-gray-500">Released: {album.releaseYear}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {!alertMessage && hasSearched && results.length === 0 && (
+                                    <p className="text-center text-gray-400">No albums found matching your search.</p>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
             );
         }
