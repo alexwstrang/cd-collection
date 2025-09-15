@@ -27,7 +27,6 @@
         }
 
         /* --- Custom Styles for the Barcode Scanner --- */
-        /* Quagga creates its own video and canvas, so we style the container */
         .scanner-viewfinder {
             position: relative;
             width: 300px;
@@ -46,7 +45,6 @@
             left: 0;
         }
 
-        /* This canvas shows the bounding box */
         .scanner-viewfinder canvas.drawingBuffer {
             z-index: 10;
         }
@@ -132,6 +130,32 @@
                         <div className="flex justify-end gap-4">
                             <button onClick={onCancel} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancel</button>
                             <button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Confirm</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function SuggestionModal({ album, onClose, onToggleListened }) {
+            if (!album) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-gray-800 p-6 rounded-lg max-w-lg w-full flex flex-col md:flex-row gap-6" onClick={e => e.stopPropagation()}>
+                        <img src={album.coverUrl} alt={album.title} className="w-48 h-auto object-cover rounded-md shadow-lg self-center md:self-start" />
+                        <div className="flex flex-col flex-grow">
+                            <h2 className="text-2xl font-bold text-white mb-2">How about this one?</h2>
+                            <p className="text-lg text-gray-300 mb-1">{album.title}</p>
+                            <p className="text-md text-gray-400 mb-4">{album.artist}</p>
+                            
+                            <button
+                                onClick={() => onToggleListened(album.id, album.listened)}
+                                className="w-full mt-auto py-2 text-sm font-bold rounded-md transition-colors bg-green-500 hover:bg-green-600 text-white"
+                            >
+                                Mark as Listened
+                            </button>
+
+                            <button onClick={onClose} className="mt-2 w-full px-4 py-2 bg-indigo-600 text-white rounded-md text-sm">Close</button>
                         </div>
                     </div>
                 </div>
@@ -229,6 +253,7 @@
             const [view, setView] = useState('gallery');
             const [albums, setAlbums] = useState([]);
             const [loadingAlbums, setLoadingAlbums] = useState(true);
+            const [randomAlbum, setRandomAlbum] = useState(null);
 
             const fetchAlbums = useCallback(async () => {
                 if (!user) return;
@@ -263,13 +288,40 @@
                 setView('gallery');
             };
 
+            const handleToggleListened = async (albumId, currentStatus) => {
+                const newStatus = !currentStatus;
+                
+                const updatedAlbums = albums.map(a => a.id === albumId ? { ...a, listened: newStatus } : a);
+                setAlbums(updatedAlbums);
+
+                if (randomAlbum && randomAlbum.id === albumId) {
+                    setRandomAlbum(null);
+                }
+                
+                const albumRef = doc(db, "albums", albumId);
+                await updateDoc(albumRef, { listened: newStatus });
+            };
+
+            const unlistenedAlbums = useMemo(() => albums.filter(album => !album.listened), [albums]);
+
+            const handleRandomSuggestion = () => {
+                if (unlistenedAlbums.length === 0) {
+                    alert("Congratulations, you've listened to everything in your collection!");
+                    return;
+                }
+                const randomIndex = Math.floor(Math.random() * unlistenedAlbums.length);
+                setRandomAlbum(unlistenedAlbums[randomIndex]);
+            };
+
             return (
                 <div className="p-4 md:p-8">
+                    <SuggestionModal album={randomAlbum} onClose={() => setRandomAlbum(null)} onToggleListened={handleToggleListened} />
                     <Navbar user={user} setView={setView} currentView={view} />
                     <main className="mt-8">
                         {view === 'add' && <AddAlbum onAlbumAdded={handleAlbumsChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats albums={albums} loading={loadingAlbums} />}
-                        {view === 'gallery' && <AlbumDisplay albums={albums} setAlbums={setAlbums} loading={loadingAlbums} onAlbumUpdated={fetchAlbums} setView={setView} />}
+                        {view === 'gallery' && <AlbumDisplay albums={albums} onAlbumUpdated={fetchAlbums} setView={setView} handleRandomSuggestion={handleRandomSuggestion} title="Your Collection" />}
+                        {view === 'to-listen' && <AlbumDisplay albums={unlistenedAlbums} onAlbumUpdated={fetchAlbums} setView={setView} handleRandomSuggestion={handleRandomSuggestion} title="To Listen To" />}
                         {view === 'search' && <Search albums={albums} onCancel={() => setView('gallery')} />}
                     </main>
                 </div>
@@ -296,10 +348,9 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">CD Collection</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.27</span>
+                            <span className="font-mono text-xs text-gray-500">v0.28</span>
                         </div>
 
-                        {/* Hamburger Button - Mobile */}
                         <div className="md:hidden">
                             <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700">
                                 <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
@@ -308,9 +359,9 @@
                             </button>
                         </div>
 
-                        {/* Desktop Navigation */}
                         <nav className="hidden md:flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                             <NavLink view="gallery">Collection</NavLink>
+                            <NavLink view="to-listen">To Listen To</NavLink>
                             <NavLink view="stats">Stats</NavLink>
                             <NavLink view="add">+ Add Album</NavLink>
                         </nav>
@@ -320,11 +371,11 @@
                         </div>
                     </div>
 
-                    {/* Mobile Menu */}
                     {isMenuOpen && (
                         <div className="md:hidden mt-4 bg-gray-800 rounded-lg p-4">
                             <nav className="flex flex-col space-y-2">
                                 <NavLink view="gallery">Collection</NavLink>
+                                <NavLink view="to-listen">To Listen To</NavLink>
                                 <NavLink view="stats">Stats</NavLink>
                                 <NavLink view="add">+ Add Album</NavLink>
                             </nav>
@@ -338,13 +389,13 @@
             );
         }
         
-        // --- Barcode Scanner Component (using Quagga2) ---
+        // --- Barcode Scanner Component ---
         function BarcodeScanner({ onScanSuccess, onCancel }) {
             const { useState, useEffect, useRef } = React;
             const [error, setError] = useState(null);
 
             useEffect(() => {
-                let isMounted = true; // Flag to prevent state updates on unmounted component
+                let isMounted = true;
 
                 Quagga.init({
                     inputStream: {
@@ -358,9 +409,9 @@
                         },
                     },
                     decoder: {
-                        readers: ["ean_reader"] // Standard for CD barcodes
+                        readers: ["ean_reader"]
                     },
-                    locate: true, // Show bounding box around detected code
+                    locate: true,
                 }, function(err) {
                     if (err) {
                         console.error("Quagga initialization error:", err);
@@ -377,7 +428,6 @@
 
                 Quagga.onDetected(onDetected);
 
-                // Cleanup
                 return () => {
                     isMounted = false;
                     Quagga.offDetected(onDetected);
@@ -395,9 +445,7 @@
                     )}
                     <p className="text-sm text-gray-400">Point your camera at the CD's barcode</p>
 
-                    {/* Quagga attaches to a div and creates its own canvas and video elements inside it */}
                     <div id="quagga-viewfinder" className="scanner-viewfinder">
-                        {/* The scan line is just a visual effect, it can stay */}
                         <div className="scanner-scan-line"></div>
                     </div>
 
@@ -840,7 +888,7 @@
         }
 
         // --- Albums Display (Gallery + List) Component ---
-        function AlbumDisplay({ albums, setAlbums, loading, onAlbumUpdated, setView }) {
+        function AlbumDisplay({ albums, onAlbumUpdated, setView, handleRandomSuggestion, title = "Your Collection" }) {
             const [viewMode, setViewMode] = useState('gallery');
             const [editingAlbumId, setEditingAlbumId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
@@ -849,14 +897,13 @@
             
             const handleToggleListened = async (albumId, currentStatus) => {
                 const newStatus = !currentStatus;
-                setAlbums(albums.map(a => a.id === albumId ? { ...a, listened: newStatus } : a));
+                const albumRef = doc(db, "albums", albumId);
+                await updateDoc(albumRef, { listened: newStatus });
+                onAlbumUpdated();
 
                 if (lightboxAlbum && lightboxAlbum.id === albumId) {
                     setLightboxAlbum(prev => ({ ...prev, listened: newStatus }));
                 }
-
-                const albumRef = doc(db, "albums", albumId);
-                await updateDoc(albumRef, { listened: newStatus });
             };
             
             const handleDeleteRequest = (albumId) => {
@@ -912,30 +959,42 @@
 
             return (
                 <div>
-                    <button
-                        onClick={() => setView('search')}
-                        className="fixed bottom-24 right-6 bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
-                        aria-label="Search collection"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </button>
-                    <button
-                        onClick={() => setView('add')}
-                        className="fixed bottom-6 right-6 bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
-                        aria-label="Add new album"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                    </button>
+                    <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-4">
+                        <button
+                            onClick={handleRandomSuggestion}
+                            className="bg-purple-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
+                            aria-label="Get random suggestion"
+                            title="Suggest an album to listen to"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => setView('search')}
+                            className="bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
+                            aria-label="Search collection"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => setView('add')}
+                            className="bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
+                            aria-label="Add new album"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
+                    </div>
 
                     <Lightbox album={lightboxAlbum} onClose={() => setLightboxAlbum(null)} onToggleListened={handleToggleListened} />
                     <ConfirmationModal isOpen={confirmDelete.isOpen} message="Are you sure you want to delete this album?" onConfirm={confirmDeletion} onCancel={cancelDeletion} />
                     
                         <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Collection ({albums.length})</h2>
+                            <h2 className="text-2xl font-bold mb-2 md:mb-0">{title} ({albums.length})</h2>
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center bg-gray-800 p-1 rounded-lg">
                                     <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
@@ -945,7 +1004,7 @@
                         </div>
                     
                     {albums.length === 0 ? (
-                        <p className="text-gray-400">No albums in your collection yet.</p>
+                        <p className="text-gray-400">{title === "Your Collection" ? "No albums in your collection yet." : "You've listened to everything!"}</p>
                     ) : viewMode === 'gallery' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                             {albums.map(album => (
@@ -1007,7 +1066,6 @@
                                         key={album.id}
                                         className="bg-gray-800 rounded-lg p-4 flex flex-col gap-3 md:table-row md:p-0 md:bg-transparent hover:bg-gray-700 transition-colors duration-200"
                                     >
-                                        {/* Mobile Card Layout */}
                                         <div className="flex gap-4 md:hidden">
                                             <img src={album.coverUrl} alt={album.title} className="w-20 h-20 object-cover rounded-md flex-shrink-0"/>
                                             <div className="flex flex-col justify-between w-full">
@@ -1020,7 +1078,9 @@
                                                     <button onClick={() => handleToggleListened(album.id, album.listened)} className="p-2 rounded-md hover:bg-gray-600" title={album.listened ? "Mark as Unlistened" : "Mark as Listened"}>
                                                         {album.listened ? 
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg> :
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd" /></svg>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
                                                         }
                                                     </button>
                                                     <button onClick={() => handleEditClick(album)} className="p-2 rounded-md hover:bg-gray-600" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg></button>
@@ -1029,7 +1089,6 @@
                                             </div>
                                         </div>
                                         
-                                        {/* Desktop Table Cells */}
                                         <div className="hidden md:table-cell p-3 align-middle rounded-l-lg">
                                             <div className="flex items-center gap-4">
                                                 <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
@@ -1062,11 +1121,12 @@
         // --- Search Component ---
         function Search({ albums, onCancel }) {
             const [searchTerm, setSearchTerm] = useState('');
-            const [searchType, setSearchType] = useState('title'); // 'title', 'artist', or 'barcode'
+            const [searchType, setSearchType] = useState('title');
             const [results, setResults] = useState([]);
             const [hasSearched, setHasSearched] = useState(false);
             const [alertMessage, setAlertMessage] = useState('');
             const [isScanning, setIsScanning] = useState(false);
+            const [barcodeResult, setBarcodeResult] = useState(null);
 
             const performSearch = (term, type) => {
                 if (!term.trim()) return;
@@ -1074,6 +1134,7 @@
                 setHasSearched(true);
                 setResults([]);
                 setAlertMessage('');
+                setBarcodeResult(null);
                 setSearchTerm(term);
                 setSearchType(type);
 
@@ -1082,18 +1143,19 @@
                     const foundAlbum = albums.find(album => album.barcode === sanitized);
 
                     if (foundAlbum) {
+                        setBarcodeResult(foundAlbum);
                         if (foundAlbum.listened) {
-                            setAlertMessage(`You already own a copy of "${foundAlbum.title}," and you've listened to it before!`);
+                            setAlertMessage(`You already own this album, and you've listened to it!`);
                         } else {
-                            setAlertMessage(`You already own a copy of "${foundAlbum.title}," but it looks like it's still waiting for its first spin.`);
+                            setAlertMessage(`You already own this album, but it's still on your 'to-listen' list.`);
                         }
                     } else {
-                        setAlertMessage("You dont own a copy of this yet!");
+                        setAlertMessage("This album isn't in your collection yet!");
                     }
                 } else {
                     const lowerCaseSearchTerm = term.toLowerCase();
                     const searchResults = albums.filter(album => {
-                        return album[type].toLowerCase().includes(lowerCaseSearchTerm);
+                        return album[type] && album[type].toLowerCase().includes(lowerCaseSearchTerm);
                     });
                     setResults(searchResults);
                 }
@@ -1108,6 +1170,20 @@
                 setIsScanning(false);
                 performSearch(decodedBarcode, 'barcode');
             };
+
+            const ResultCard = ({ album }) => (
+                <div className="flex items-center gap-4 p-3 bg-gray-700 rounded-lg">
+                    <img src={album.coverUrl} alt={album.title} className="w-16 h-16 object-cover rounded-md flex-shrink-0"/>
+                    <div className="flex-grow">
+                        <p className="font-bold text-white">{album.title}</p>
+                        <p className="text-sm text-gray-300">{album.artist}</p>
+                        <p className="text-xs text-gray-500">Released: {album.releaseYear || 'N/A'}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${album.listened ? 'bg-green-200 text-green-800' : 'bg-gray-600 text-gray-200'}`}>
+                        {album.listened ? 'Listened' : 'Not Listened'}
+                    </span>
+                </div>
+            );
 
             return (
                 <div className="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg">
@@ -1154,28 +1230,18 @@
                                 </button>
                             </form>
 
-                            <div className="mt-4">
+                            <div className="mt-4 space-y-4">
                                 {alertMessage && (
                                     <div className="text-center p-4 bg-gray-700 rounded-lg shadow-inner">
                                         <p className="text-lg text-indigo-300">{alertMessage}</p>
                                     </div>
                                 )}
 
-                                {!alertMessage && hasSearched && results.length > 0 && (
-                                    <div className="space-y-3">
-                                        {results.map(album => (
-                                            <div key={album.id} className="flex items-start gap-4 p-3 bg-gray-700 rounded-lg">
-                                                <img src={album.coverUrl} alt={album.title} className="w-10 h-10 object-cover rounded-md flex-shrink-0"/>
-                                                <div>
-                                                    <p className="font-bold text-white">{album.title}</p>
-                                                    <p className="text-sm text-gray-400">{album.artist}</p>
-                                                    <p className="text-xs text-gray-500">Released: {album.releaseYear}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                {!alertMessage && hasSearched && results.length === 0 && (
+                                {barcodeResult && <ResultCard album={barcodeResult} />}
+                                
+                                {results.length > 0 && results.map(album => <ResultCard key={album.id} album={album} />)}
+
+                                {hasSearched && !barcodeResult && results.length === 0 && !alertMessage && (
                                     <p className="text-center text-gray-400">No albums found matching your search.</p>
                                 )}
                             </div>
